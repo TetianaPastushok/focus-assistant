@@ -156,7 +156,7 @@ class FocusAssistantApp(ctk.CTk):
         self.stat_score.pack(pady=6, padx=6)
 
         # State - compact
-        mode_ua = MODE_UA.get(self.cfg.experiment_mode, self.cfg.experiment_mode)
+        mode_ua = MODE_UA.get(self.analyzer.mode, self.analyzer.mode)
         self.stat_state = ctk.CTkLabel(
             self.main_container,
             text=f"Режим: {mode_ua} | Стан: {ATTENTION_STATE_UA['NORMAL']}",
@@ -216,7 +216,7 @@ class FocusAssistantApp(ctk.CTk):
     def _update_state_label(self):
         """Update the mode and state display label."""
         current_state = ATTENTION_STATE_UA.get('NORMAL', 'НОРМА')
-        mode_ua = MODE_UA.get(self.cfg.experiment_mode, self.cfg.experiment_mode)
+        mode_ua = MODE_UA.get(self.analyzer.mode, self.analyzer.mode)
         self.stat_state.configure(
             text=f"Режим: {mode_ua} | Стан: {current_state}"
         )
@@ -231,7 +231,7 @@ class FocusAssistantApp(ctk.CTk):
         else:
             mode = "baseline"   # AI disabled - measurement only
         
-        self.cfg.experiment_mode = mode
+        # Update analyzer mode (use analyzer.mode instead of cfg.experiment_mode which is frozen)
         self.analyzer.set_enable_ai(self.enable_ai)
         self.analyzer.mode = mode
         
@@ -269,7 +269,7 @@ class FocusAssistantApp(ctk.CTk):
                 self.cap = None
             return
 
-        self.analyzer.reset(time.time(), mode=self.cfg.experiment_mode)
+        self.analyzer.reset(time.time(), mode=self.analyzer.mode)
         self.csv_logger.start()
 
         self.is_running = True
