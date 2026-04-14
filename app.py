@@ -13,7 +13,7 @@ from text_render import draw_unicode_text
 from tray_manager import TrayManager
 
 
-ctk.set_appearance_mode("dark")
+ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
 
@@ -40,7 +40,10 @@ class FocusAssistantApp(ctk.CTk):
         self.minsize(800, 500)
 
         self.cfg = FocusConfig()
-        self.analyzer = FocusAnalyzer(self.cfg, gemini_api_key=self.cfg.gemini_api_key)
+
+        self.enable_ai = True
+
+        self.analyzer = FocusAnalyzer(self.cfg, gemini_api_key=self.cfg.gemini_api_key, enable_ai=self.enable_ai)
         self.csv_logger = SessionCsvLogger("session_log.csv")
 
         self.is_running = False
@@ -62,76 +65,127 @@ class FocusAssistantApp(ctk.CTk):
         self.tray.start()
 
     def _build_ui(self):
+        # Main layout
         self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
 
-        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
-        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(6, weight=1)
+        # Main container
+        self.main_container = ctk.CTkScrollableFrame(self, corner_radius=15)
+        self.main_container.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        self.main_container.grid_columnconfigure(0, weight=1)
 
-        self.logo_label = ctk.CTkLabel(
-            self.sidebar_frame,
+        # Title
+        self.title_label = ctk.CTkLabel(
+            self.main_container,
             text="Фокус Асистент",
-            font=ctk.CTkFont(size=20, weight="bold"),
+            font=ctk.CTkFont(size=24, weight="bold"),
         )
-        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 20))
+        self.title_label.grid(row=0, column=0, pady=(20, 10))
+
+        # Privacy notice
+        self.privacy_label = ctk.CTkLabel(
+            self.main_container,
+            text="⚠️ Ця програма використовує камеру для аналізу обличчя. Переконайтеся у згоді на моніторинг.",
+            font=ctk.CTkFont(size=12),
+            text_color="gray",
+        )
+        self.privacy_label.grid(row=1, column=0, pady=(0, 10))
+
+        # Video frame
+        self.video_frame = ctk.CTkFrame(self.main_container, corner_radius=15, fg_color="lightgray")
+        self.video_frame.grid(row=2, column=0, pady=10, padx=20, sticky="ew")
+        self.video_frame.grid_rowconfigure(0, weight=1)
+        self.video_frame.grid_columnconfigure(0, weight=1)
+
+        self.video_label = ctk.CTkLabel(
+            self.video_frame,
+            text="Очікування запуску...",
+            corner_radius=10,
+        )
+        self.video_label.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+
+        # Stats cards
+        self.stats_frame = ctk.CTkFrame(self.main_container, corner_radius=15, fg_color="transparent")
+        self.stats_frame.grid(row=3, column=0, pady=10, padx=20, sticky="ew")
+        self.stats_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        # Stat cards
+        self.stat_focus_frame = ctk.CTkFrame(self.stats_frame, corner_radius=10)
+        self.stat_focus_frame.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
+        self.stat_focus = ctk.CTkLabel(self.stat_focus_frame, text="Час фокусу\n0 с", font=ctk.CTkFont(size=16, weight="bold"))
+        self.stat_focus.pack(pady=10, padx=10)
+
+        self.stat_distractions_frame = ctk.CTkFrame(self.stats_frame, corner_radius=10)
+        self.stat_distractions_frame.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
+        self.stat_distractions = ctk.CTkLabel(self.stat_distractions_frame, text="Відволікання\n0", font=ctk.CTkFont(size=16, weight="bold"))
+        self.stat_distractions.pack(pady=10, padx=10)
+
+        self.stat_bpm_frame = ctk.CTkFrame(self.stats_frame, corner_radius=10)
+        self.stat_bpm_frame.grid(row=0, column=2, padx=5, pady=5, sticky="nsew")
+        self.stat_bpm = ctk.CTkLabel(self.stat_bpm_frame, text="BPM\n0", font=ctk.CTkFont(size=16, weight="bold"))
+        self.stat_bpm.pack(pady=10, padx=10)
+
+        self.stat_score_frame = ctk.CTkFrame(self.stats_frame, corner_radius=10)
+        self.stat_score_frame.grid(row=0, column=3, padx=5, pady=5, sticky="nsew")
+        self.stat_score = ctk.CTkLabel(self.stat_score_frame, text="Коефіцієнт фокусу\n0.0", font=ctk.CTkFont(size=16, weight="bold"))
+        self.stat_score.pack(pady=10, padx=10)
+
+        # State
+        self.stat_state = ctk.CTkLabel(
+            self.main_container,
+            text=f"Режим: {self.cfg.experiment_mode}\nСтан: {ATTENTION_STATE_UA['NORMAL']}",
+            font=ctk.CTkFont(size=14),
+        )
+        self.stat_state.grid(row=3, column=0, pady=10)
+
+        # Controls
+        self.controls_frame = ctk.CTkFrame(self.main_container, corner_radius=15, fg_color="transparent")
+        self.controls_frame.grid(row=4, column=0, pady=10, padx=20, sticky="ew")
+        self.controls_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.start_btn = ctk.CTkButton(
-            self.sidebar_frame,
+            self.controls_frame,
             text="Почати сесію",
             fg_color="#28a745",
             hover_color="#218838",
             command=self.start_session,
+            corner_radius=10,
         )
-        self.start_btn.grid(row=1, column=0, padx=20, pady=10)
+        self.start_btn.grid(row=0, column=0, padx=5, pady=5)
 
         self.stop_btn = ctk.CTkButton(
-            self.sidebar_frame,
+            self.controls_frame,
             text="Зупинити",
             fg_color="#dc3545",
             hover_color="#c82333",
             command=self.stop_session,
             state="disabled",
-        )
-        self.stop_btn.grid(row=2, column=0, padx=20, pady=10)
-
-        self.tray_btn = ctk.CTkButton(
-            self.sidebar_frame,
-            text="Згорнути в трей",
-            command=self.hide_to_tray,
-        )
-        self.tray_btn.grid(row=3, column=0, padx=20, pady=10)
-
-        self.main_frame = ctk.CTkFrame(self)
-        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
-        self.main_frame.grid_rowconfigure(0, weight=1)
-        self.main_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
-
-        self.video_label = ctk.CTkLabel(
-            self.main_frame,
-            text="Очікування запуску...",
-            fg_color="gray15",
             corner_radius=10,
         )
-        self.video_label.grid(row=0, column=0, columnspan=4, sticky="nsew", padx=20, pady=20)
+        self.stop_btn.grid(row=0, column=1, padx=5, pady=5)
 
-        self.stat_focus = ctk.CTkLabel(self.main_frame, text="Час фокусу:\n0 с", font=ctk.CTkFont(size=18, weight="bold"))
-        self.stat_focus.grid(row=1, column=0, padx=10, pady=20)
-
-        self.stat_distractions = ctk.CTkLabel(self.main_frame, text="Відволікання:\n0", font=ctk.CTkFont(size=18, weight="bold"))
-        self.stat_distractions.grid(row=1, column=1, padx=10, pady=20)
-
-        self.stat_bpm = ctk.CTkLabel(self.main_frame, text="BPM:\n0", font=ctk.CTkFont(size=18, weight="bold"))
-        self.stat_bpm.grid(row=1, column=2, padx=10, pady=20)
-
-        self.stat_score = ctk.CTkLabel(self.main_frame, text="Коефіцієнт фокусу:\n0.0", font=ctk.CTkFont(size=18, weight="bold"))
-        self.stat_score.grid(row=1, column=3, padx=10, pady=20)
-        self.stat_state = ctk.CTkLabel(
-            self.main_frame,
-            text=f"Режим: {self.cfg.experiment_mode}\nСтан: {ATTENTION_STATE_UA['NORMAL']}",
-            font=ctk.CTkFont(size=16),
+        self.tray_btn = ctk.CTkButton(
+            self.controls_frame,
+            text="Згорнути в трей",
+            command=self.hide_to_tray,
+            corner_radius=10,
         )
-        self.stat_state.grid(row=2, column=0, columnspan=4, padx=10, pady=(0, 10))
+        self.tray_btn.grid(row=0, column=2, padx=5, pady=5)
+
+        # AI Toggle
+        self.ai_switch = ctk.CTkSwitch(
+            self.main_container,
+            text="Увімкнути AI Асистент",
+            command=self.toggle_ai,
+            onvalue=True,
+            offvalue=False,
+        )
+        self.ai_switch.select()  # Default on
+        self.ai_switch.grid(row=5, column=0, pady=10)
+
+    def toggle_ai(self):
+        self.enable_ai = self.ai_switch.get()
+        self.analyzer.set_enable_ai(self.enable_ai)
 
     def toggle_session(self):
         if self.is_running:
@@ -140,21 +194,29 @@ class FocusAssistantApp(ctk.CTk):
             self.start_session()
 
     def start_session(self):
+        """
+        Start the focus monitoring session.
+        Initializes camera, face mesh, and begins frame processing.
+        """
         if self.is_running:
             return
 
-        self.cap = cv2.VideoCapture(0)
-        if not self.cap.isOpened():
-            self.video_label.configure(text="Камера недоступна", image=None)
-            self.cap.release()
-            self.cap = None
-            return
+        try:
+            self.cap = cv2.VideoCapture(0)
+            if not self.cap.isOpened():
+                raise ValueError("Camera not accessible")
 
-        self.face_mesh = mp.solutions.face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.7,
-        )
+            self.face_mesh = mp.solutions.face_mesh.FaceMesh(
+                max_num_faces=1,
+                refine_landmarks=True,
+                min_detection_confidence=0.7,
+            )
+        except Exception as e:
+            self.video_label.configure(text=f"Помилка ініціалізації: {str(e)}", image=None)
+            if self.cap:
+                self.cap.release()
+                self.cap = None
+            return
 
         self.analyzer.reset(time.time(), mode=self.cfg.experiment_mode)
         self.csv_logger.start()

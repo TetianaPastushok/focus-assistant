@@ -19,12 +19,49 @@ except ImportError:
     GeminiClient = None
 
 
+"""
+FocusAnalyzer: Core class for real-time focus monitoring using computer vision and AI.
+
+This class analyzes facial landmarks from webcam frames to compute focus metrics
+such as PERCLOS (Percentage of Eye Closure), EAR (Eye Aspect Ratio), and head pose.
+It provides interventions (warnings/critical alerts) and optional AI-generated advice.
+"""
+
 class FocusAnalyzer:
-    def __init__(self, cfg: Optional[FocusConfig] = None, mode: Optional[str] = None, gemini_api_key: Optional[str] = None):
+    """
+    Analyzes user focus based on facial features and provides personalized interventions.
+
+    Attributes:
+        cfg (FocusConfig): Configuration parameters for thresholds and modes.
+        mode (str): Current experiment mode ('assistant' or 'baseline').
+        gemini_client (GeminiClient): AI client for dynamic advice generation.
+        enable_ai (bool): Flag to enable/disable AI-powered interventions.
+    """
+
+    def __init__(self, cfg: Optional[FocusConfig] = None, mode: Optional[str] = None, gemini_api_key: Optional[str] = None, enable_ai: bool = True):
+        """
+        Initialize the FocusAnalyzer.
+
+        Args:
+            cfg: Configuration object with thresholds and settings.
+            mode: Experiment mode ('assistant' for interventions, 'baseline' for measurement only).
+            gemini_api_key: API key for Google Gemini AI.
+            enable_ai: Enable AI-generated advice (default: True).
+        """
         self.cfg = cfg or FocusConfig()
         self.mode = mode or self.cfg.experiment_mode
         self.gemini_client = GeminiClient(gemini_api_key) if GeminiClient and gemini_api_key else None
+        self.enable_ai = enable_ai
         self.reset(0.0)
+
+    def set_enable_ai(self, enable: bool):
+        """
+        Enable or disable AI-powered advice generation.
+
+        Args:
+            enable: True to use AI for dynamic interventions, False for static messages.
+        """
+        self.enable_ai = enable
 
     def reset(self, start_time: float, mode: Optional[str] = None) -> None:
         if mode is not None:
@@ -228,7 +265,7 @@ class FocusAnalyzer:
         return continuous_inattention_sec, max(0.0, self._window_inattention_sec), continuous_focus_sec
 
     def _build_intervention(self, level: str, reason: str, metrics: dict) -> dict:
-        if self.gemini_client:
+        if self.enable_ai and self.gemini_client:
             # Динамічна порада через Gemini
             advice = self.gemini_client.generate_advice(metrics)
         else:
@@ -339,6 +376,18 @@ class FocusAnalyzer:
         return max(0.1, round(score, 2))
 
     def process(self, landmarks, width: int, height: int, current_time: float) -> dict:
+        """
+        Process facial landmarks to compute focus metrics and determine intervention level.
+
+        Args:
+            landmarks: MediaPipe facial landmarks.
+            width: Frame width.
+            height: Frame height.
+            current_time: Current timestamp.
+
+        Returns:
+            dict: Analysis results including zone, metrics, and intervention data.
+        """
         zone = "NO FACE"
         color = (255, 0, 0)
         pitch = 0.0

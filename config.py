@@ -51,4 +51,4 @@ class FocusConfig:
     focused_zones: tuple[str, ...] = ("NORMAL", "MID DOWN", "DEEP DOWN")
 
     # Gemini API key (optional, for dynamic advice)
-    gemini_api_key: Optional[str] = "API_KEY"
+    gemini_api_key: Optional[str] = "AIzaSyAaA55EWsvyW5SFV6jwDTnNu5V7gQiHbrg"
