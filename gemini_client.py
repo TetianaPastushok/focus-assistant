@@ -5,19 +5,33 @@ from datetime import datetime
 from typing import Optional
 
 try:
-    import google.generativeai as genai
+    from google import genai
 except ImportError:
-    genai = None
+    try:
+        import google.generativeai as genai
+    except ImportError:
+        genai = None
 
 
 class GeminiClient:
-    """Клієнт для генерації динамічних порад через Gemini AI."""
+    """Client for generating dynamic advice using Google Gemini AI.
+    
+    Supports both new google.genai and legacy google.generativeai packages.
+    """
     
     def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
+        """Initialize Gemini client with API key."""
         if genai is None:
-            raise ImportError("Встановіть google-generativeai: pip install google-generativeai")
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model)
+            raise ImportError("Install Google Generative AI: pip install google-genai or pip install google-generativeai")
+        
+        if hasattr(genai, 'configure'):
+            # Legacy API
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel(model)
+        else:
+            # New API
+            self.client = genai.Client(api_key=api_key)
+            self.model_name = model
         self.history: list[str] = []  # Історія останніх 3 порад для уникнення повторів
 
     def _get_time_of_day(self) -> str:
