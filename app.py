@@ -208,9 +208,29 @@ class FocusAssistantApp(ctk.CTk):
         self.ai_switch.select()  # Default on
         self.ai_switch.grid(row=6, column=0, pady=5, sticky="w", padx=12)
 
+    def _update_state_label(self):
+        """Update the mode and state display label."""
+        current_state = ATTENTION_STATE_UA.get('NORMAL', 'НОРМА')
+        self.stat_state.configure(
+            text=f"Режим: {self.cfg.experiment_mode} | Стан: {current_state}"
+        )
+
     def toggle_ai(self):
+        """Enable or disable AI-powered interventions and update mode accordingly."""
         self.enable_ai = self.ai_switch.get()
+        
+        # Change experiment mode based on AI state
+        if self.enable_ai:
+            mode = "assistant"  # AI enabled - provide interventions
+        else:
+            mode = "baseline"   # AI disabled - measurement only
+        
+        self.cfg.experiment_mode = mode
         self.analyzer.set_enable_ai(self.enable_ai)
+        self.analyzer.mode = mode
+        
+        # Update status display
+        self._update_state_label()
 
     def toggle_session(self):
         if self.is_running:
