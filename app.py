@@ -30,6 +30,10 @@ ATTENTION_STATE_UA = {
     "WARNING": "ПОПЕРЕДЖЕННЯ",
     "CRITICAL": "КРИТИЧНО",
 }
+MODE_UA = {
+    "assistant": "З асистентом",
+    "baseline": "Без асистента",
+}
 
 
 class FocusAssistantApp(ctk.CTk):
@@ -152,9 +156,10 @@ class FocusAssistantApp(ctk.CTk):
         self.stat_score.pack(pady=6, padx=6)
 
         # State - compact
+        mode_ua = MODE_UA.get(self.cfg.experiment_mode, self.cfg.experiment_mode)
         self.stat_state = ctk.CTkLabel(
             self.main_container,
-            text=f"Режим: {self.cfg.experiment_mode} | Стан: {ATTENTION_STATE_UA['NORMAL']}",
+            text=f"Режим: {mode_ua} | Стан: {ATTENTION_STATE_UA['NORMAL']}",
             font=ctk.CTkFont(size=11),
         )
         self.stat_state.grid(row=4, column=0, pady=5, sticky="w", padx=12)
@@ -211,8 +216,9 @@ class FocusAssistantApp(ctk.CTk):
     def _update_state_label(self):
         """Update the mode and state display label."""
         current_state = ATTENTION_STATE_UA.get('NORMAL', 'НОРМА')
+        mode_ua = MODE_UA.get(self.cfg.experiment_mode, self.cfg.experiment_mode)
         self.stat_state.configure(
-            text=f"Режим: {self.cfg.experiment_mode} | Стан: {current_state}"
+            text=f"Режим: {mode_ua} | Стан: {current_state}"
         )
 
     def toggle_ai(self):
@@ -380,7 +386,8 @@ class FocusAssistantApp(ctk.CTk):
         self.stat_bpm.configure(text=f"BPM:\n{metrics['bpm']}")
         self.stat_score.configure(text=f"Коефіцієнт фокусу:\n{metrics['focus_score']}")
         state_label = ATTENTION_STATE_UA.get(metrics["attention_state"], metrics["attention_state"])
-        self.stat_state.configure(text=f"Режим: {metrics['mode']}\nСтан: {state_label}")
+        mode_ua = MODE_UA.get(metrics['mode'], metrics['mode'])
+        self.stat_state.configure(text=f"Режим: {mode_ua}\nСтан: {state_label}")
 
         # DEBUG: Логування для налагодження
         self._frame_debug_counter += 1
