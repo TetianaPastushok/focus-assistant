@@ -74,7 +74,7 @@ class FocusAssistantApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
 
         # Main container (regular Frame instead of ScrollableFrame to avoid lag)
-        self.main_container = ctk.CTkFrame(self, corner_radius=15)
+        self.main_container = ctk.CTkFrame(self, corner_radius=15, fg_color="#F5F7FA")
         self.main_container.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
         self.main_container.grid_rowconfigure(2, weight=1)  # Video expands
         self.main_container.grid_columnconfigure(0, weight=1)
@@ -155,32 +155,48 @@ class FocusAssistantApp(ctk.CTk):
         )
         self.stat_score.pack(pady=6, padx=6)
 
-        # State - compact
-        mode_ua = MODE_UA.get(self.analyzer.mode, self.analyzer.mode)
-        self.stat_state = ctk.CTkLabel(
-            self.main_container,
-            text=f"Режим: {mode_ua} | Стан: {ATTENTION_STATE_UA['NORMAL']}",
-            font=ctk.CTkFont(size=11),
+        # Status cards
+        self.status_frame = ctk.CTkFrame(self.main_container, corner_radius=15, fg_color="#E9EEF5")
+        self.status_frame.grid(row=4, column=0, pady=10, padx=12, sticky="ew")
+        self.status_frame.grid_columnconfigure((0, 1, 2), weight=1)
+
+        self.stat_mode = ctk.CTkLabel(
+            self.status_frame,
+            text=f"Режим: {mode_ua}",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#2F3C4F",
+            anchor="w",
         )
-        self.stat_state.grid(row=4, column=0, pady=(5, 2), sticky="w", padx=12)
+        self.stat_mode.grid(row=0, column=0, padx=12, pady=10, sticky="ew")
+
+        self.stat_attention = ctk.CTkLabel(
+            self.status_frame,
+            text=f"Стан: {ATTENTION_STATE_UA['NORMAL']}",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#2F3C4F",
+            anchor="w",
+        )
+        self.stat_attention.grid(row=0, column=1, padx=12, pady=10, sticky="ew")
 
         self.stat_zone = ctk.CTkLabel(
-            self.main_container,
+            self.status_frame,
             text="Зона: НОРМА",
-            font=ctk.CTkFont(size=11),
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#2F3C4F",
+            anchor="w",
         )
-        self.stat_zone.grid(row=5, column=0, pady=(0, 8), sticky="w", padx=12)
+        self.stat_zone.grid(row=0, column=2, padx=12, pady=10, sticky="ew")
 
         # Controls - responsive grid
         self.controls_frame = ctk.CTkFrame(self.main_container, corner_radius=12, fg_color="transparent")
-        self.controls_frame.grid(row=6, column=0, pady=8, padx=12, sticky="ew")
+        self.controls_frame.grid(row=5, column=0, pady=8, padx=12, sticky="ew")
         self.controls_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.start_btn = ctk.CTkButton(
             self.controls_frame,
             text="Почати",
-            fg_color="#28a745",
-            hover_color="#218838",
+            fg_color="#4CAF50",
+            hover_color="#45A049",
             command=self.start_session,
             corner_radius=8,
             font=ctk.CTkFont(size=10),
@@ -190,8 +206,8 @@ class FocusAssistantApp(ctk.CTk):
         self.stop_btn = ctk.CTkButton(
             self.controls_frame,
             text="Стоп",
-            fg_color="#dc3545",
-            hover_color="#c82333",
+            fg_color="#E53935",
+            hover_color="#D32F2F",
             command=self.stop_session,
             state="disabled",
             corner_radius=8,
@@ -202,6 +218,8 @@ class FocusAssistantApp(ctk.CTk):
         self.tray_btn = ctk.CTkButton(
             self.controls_frame,
             text="Трей",
+            fg_color="#1976D2",
+            hover_color="#1565C0",
             command=self.hide_to_tray,
             corner_radius=8,
             font=ctk.CTkFont(size=10),
@@ -224,9 +242,8 @@ class FocusAssistantApp(ctk.CTk):
         """Update the mode and state display label."""
         current_state = ATTENTION_STATE_UA.get('NORMAL', 'НОРМА')
         mode_ua = MODE_UA.get(self.analyzer.mode, self.analyzer.mode)
-        self.stat_state.configure(
-            text=f"Режим: {mode_ua} | Стан: {current_state}"
-        )
+        self.stat_mode.configure(text=f"Режим: {mode_ua}")
+        self.stat_attention.configure(text=f"Стан: {current_state}")
 
     def toggle_ai(self):
         """Enable or disable AI-powered interventions and update mode accordingly."""
@@ -394,7 +411,8 @@ class FocusAssistantApp(ctk.CTk):
         self.stat_score.configure(text=f"Коефіцієнт фокусу:\n{metrics['focus_score']}")
         state_label = ATTENTION_STATE_UA.get(metrics["attention_state"], metrics["attention_state"])
         mode_ua = MODE_UA.get(metrics['mode'], metrics['mode'])
-        self.stat_state.configure(text=f"Режим: {mode_ua}\nСтан: {state_label}")
+        self.stat_mode.configure(text=f"Режим: {mode_ua}")
+        self.stat_attention.configure(text=f"Стан: {state_label}")
         self.stat_zone.configure(text=f"Зона: {zone_label}")
 
         # DEBUG: Логування для налагодження
