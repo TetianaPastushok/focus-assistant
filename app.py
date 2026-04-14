@@ -173,7 +173,7 @@ class FocusAssistantApp(ctk.CTk):
 
         # Controls - responsive grid
         self.controls_frame = ctk.CTkFrame(self.main_container, corner_radius=12, fg_color="transparent")
-        self.controls_frame.grid(row=5, column=0, pady=8, padx=12, sticky="ew")
+        self.controls_frame.grid(row=6, column=0, pady=8, padx=12, sticky="ew")
         self.controls_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.start_btn = ctk.CTkButton(
@@ -218,7 +218,7 @@ class FocusAssistantApp(ctk.CTk):
             font=ctk.CTkFont(size=10),
         )
         self.ai_switch.select()  # Default on
-        self.ai_switch.grid(row=6, column=0, pady=5, sticky="w", padx=12)
+        self.ai_switch.grid(row=7, column=0, pady=5, sticky="w", padx=12)
 
     def _update_state_label(self):
         """Update the mode and state display label."""
