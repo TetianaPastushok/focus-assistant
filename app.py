@@ -162,7 +162,14 @@ class FocusAssistantApp(ctk.CTk):
             text=f"Режим: {mode_ua} | Стан: {ATTENTION_STATE_UA['NORMAL']}",
             font=ctk.CTkFont(size=11),
         )
-        self.stat_state.grid(row=4, column=0, pady=5, sticky="w", padx=12)
+        self.stat_state.grid(row=4, column=0, pady=(5, 2), sticky="w", padx=12)
+
+        self.stat_zone = ctk.CTkLabel(
+            self.main_container,
+            text="Зона: НОРМА",
+            font=ctk.CTkFont(size=11),
+        )
+        self.stat_zone.grid(row=5, column=0, pady=(0, 8), sticky="w", padx=12)
 
         # Controls - responsive grid
         self.controls_frame = ctk.CTkFrame(self.main_container, corner_radius=12, fg_color="transparent")
@@ -388,6 +395,7 @@ class FocusAssistantApp(ctk.CTk):
         state_label = ATTENTION_STATE_UA.get(metrics["attention_state"], metrics["attention_state"])
         mode_ua = MODE_UA.get(metrics['mode'], metrics['mode'])
         self.stat_state.configure(text=f"Режим: {mode_ua}\nСтан: {state_label}")
+        self.stat_zone.configure(text=f"Зона: {zone_label}")
 
         # DEBUG: Логування для налагодження
         self._frame_debug_counter += 1
