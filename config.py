@@ -34,16 +34,16 @@ class FocusConfig:
 
     # Adaptive intervention logic
     session_warmup_sec: int = 25  # Дозволяємо користувачу розправитися перед перевіркою
-    warning_grace_sec: int = 8  # Час безперервної втрати уваги до WARNING
-    warning_accum_sec: int = 12  # Накопичуємо 12 сек втрати перед попередженням
+    warning_grace_sec: int = 10  # Час безперервної втрати уваги до WARNING
+    warning_accum_sec: int = 16  # Накопичуємо 16 сек втрати перед попередженням
     warning_window_sec: int = 20
     warning_cooldown_sec: int = 30
-    critical_grace_sec: int = 16  # 16 сек знехтування перед CRITICAL
-    critical_accum_sec: int = 18
+    critical_grace_sec: int = 20  # 20 сек знехтування перед CRITICAL
+    critical_accum_sec: int = 24
     critical_cooldown_sec: int = 120
     recovery_reset_sec: int = 6  # 6 сек зосередженості перед скиданням
     pose_smoothing_frames: int = 15  # Збільшуємо з 7 до 15 для стабільнішої класифікації зони
-    away_hold_sec: float = 0.8
+    away_hold_sec: float = 2.0
 
     # "assistant" -> interventions enabled, "baseline" -> only measurement
     experiment_mode: str = "assistant"

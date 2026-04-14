@@ -71,6 +71,15 @@ class TestFocusAnalyzer(unittest.TestCase):
         result = self.analyzer._build_intervention("WARNING", "DISTRACTION", metrics)
         self.assertEqual(result["intervention_message"], "Mock AI advice")
 
+    def test_zone_gaze_score(self):
+        """Test gaze score mapping for different head pose zones."""
+        self.assertEqual(self.analyzer._zone_gaze_score("NORMAL"), 1.0)
+        self.assertEqual(self.analyzer._zone_gaze_score("MID DOWN"), 0.85)
+        self.assertEqual(self.analyzer._zone_gaze_score("DEEP DOWN"), 0.7)
+        self.assertEqual(self.analyzer._zone_gaze_score("LOOKING UP"), 0.5)
+        self.assertEqual(self.analyzer._zone_gaze_score("AWAY/TURNED"), 0.0)
+        self.assertEqual(self.analyzer._zone_gaze_score("NO FACE"), 0.0)
+
 
 if __name__ == '__main__':
     unittest.main()

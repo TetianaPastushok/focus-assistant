@@ -3,7 +3,7 @@
 import customtkinter as ctk
 import cv2
 import mediapipe as mp
-from PIL import Image
+from PIL import Image, ImageOps
 from plyer import notification
 
 from config import FocusConfig
@@ -40,8 +40,8 @@ class FocusAssistantApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("KPI Фокус Асистент")
-        self.geometry("950x650")
-        self.minsize(800, 500)
+        self.geometry("1280x820")
+        self.minsize(1100, 700)
 
         self.cfg = FocusConfig()
 
@@ -106,8 +106,10 @@ class FocusAssistantApp(ctk.CTk):
             self.video_frame,
             text="Очікування запуску...",
             corner_radius=10,
+            width=940,
+            height=520,
         )
-        self.video_label.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        self.video_label.grid(row=0, column=0, sticky="n", padx=8, pady=8)
 
         # Stats cards - responsive
         self.stats_frame = ctk.CTkFrame(self.main_container, corner_radius=12, fg_color="transparent")
@@ -156,6 +158,7 @@ class FocusAssistantApp(ctk.CTk):
         self.stat_score.pack(pady=6, padx=6)
 
         # Status cards
+        mode_ua = MODE_UA.get(self.analyzer.mode, self.analyzer.mode)
         self.status_frame = ctk.CTkFrame(self.main_container, corner_radius=15, fg_color="#E9EEF5")
         self.status_frame.grid(row=4, column=0, pady=10, padx=12, sticky="ew")
         self.status_frame.grid_columnconfigure((0, 1, 2), weight=1)
@@ -281,6 +284,10 @@ class FocusAssistantApp(ctk.CTk):
             if not self.cap.isOpened():
                 raise ValueError("Camera not accessible")
 
+            # Prefer a standard webcam resolution for a better head-and-shoulders preview
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
             self.face_mesh = mp.solutions.face_mesh.FaceMesh(
                 max_num_faces=1,
                 refine_landmarks=True,
@@ -345,6 +352,15 @@ class FocusAssistantApp(ctk.CTk):
         self.stop_session()
         self.tray.stop()
         self.destroy()
+
+    def _make_preview_image(self, frame, max_size=(900, 520)):
+        image = Image.fromarray(frame)
+        image = ImageOps.contain(image, max_size, Image.LANCZOS)
+        background = Image.new("RGB", max_size, (235, 237, 240))
+        x = (max_size[0] - image.width) // 2
+        y = (max_size[1] - image.height) // 2
+        background.paste(image, (x, y))
+        return background
 
     def update_frame(self):
         if not self.is_running or not self.cap or not self.face_mesh:
@@ -422,8 +438,8 @@ class FocusAssistantApp(ctk.CTk):
 
         self.csv_logger.log_once_per_second(current_time, metrics)
 
-        img = Image.fromarray(rgb_frame)
-        self._frame_image = ctk.CTkImage(light_image=img, dark_image=img, size=(w, h))
+        preview = self._make_preview_image(rgb_frame, max_size=(900, 520))
+        self._frame_image = ctk.CTkImage(light_image=preview, dark_image=preview, size=preview.size)
         self.video_label.configure(image=self._frame_image, text="")
 
         self.after(10, self.update_frame)

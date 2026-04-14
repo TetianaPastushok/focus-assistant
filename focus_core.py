@@ -363,6 +363,18 @@ class FocusAnalyzer:
 
         return None
 
+    def _zone_gaze_score(self, zone: str) -> float:
+        """Convert the detected head/gaze zone into a normalized gaze score."""
+        zone_scores = {
+            "NORMAL": 1.0,
+            "MID DOWN": 0.85,
+            "DEEP DOWN": 0.7,
+            "LOOKING UP": 0.5,
+            "AWAY/TURNED": 0.0,
+            "NO FACE": 0.0,
+        }
+        return zone_scores.get(zone, 0.0)
+
     def _compute_focus_score(self, gaze_score: float, perclos: float, bpm: int) -> float:
         alertness_score = max(0.0, 1.0 - (perclos / 100.0))
         weights_sum = self.cfg.focus_w_gaze + self.cfg.focus_w_alertness
@@ -435,7 +447,7 @@ class FocusAnalyzer:
 
         bpm = len(self._blink_timestamps)
         perclos = (self._window_closed / self._window_total) * 100 if self._window_total else 0.0
-        gaze_score = 1.0 if zone in self.cfg.focused_zones else 0.0
+        gaze_score = self._zone_gaze_score(zone)
         focus_score = self._compute_focus_score(gaze_score, perclos, bpm)
 
         inattentive = (
