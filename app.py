@@ -131,7 +131,7 @@ class FocusAssistantApp(ctk.CTk):
         self.stat_distractions_frame.grid(row=0, column=1, padx=3, pady=4, sticky="ew")
         self.stat_distractions = ctk.CTkLabel(
             self.stat_distractions_frame, 
-            text="Відволік\n0", 
+            text="Відволікання\n0", 
             font=ctk.CTkFont(size=12, weight="bold"),
             wraplength=90
         )
@@ -220,7 +220,7 @@ class FocusAssistantApp(ctk.CTk):
 
         self.tray_btn = ctk.CTkButton(
             self.controls_frame,
-            text="Трей",
+            text="Сховати",
             fg_color="#1976D2",
             hover_color="#1565C0",
             command=self.hide_to_tray,
@@ -394,22 +394,14 @@ class FocusAssistantApp(ctk.CTk):
         )
 
         # DEBUG: Показуємо информацію про міцність у консоль
-        if metrics["intervention_level"]:
+        if metrics.get("should_notify") and metrics.get("intervention_message"):
+            # 1. Друкуємо в консоль для дебагу один раз
             print(f"[INTERVENTION] {metrics['intervention_level']}: {metrics['intervention_message']}")
-
-        if metrics["intervention_level"] == "WARNING" and metrics["intervention_message"]:
+            
+            # 2. Відправляємо тихе сповіщення в системний трей
             self.tray.notify("Порада асистента", metrics["intervention_message"])
-            try:
-                notification.notify(
-                    title="Порада асистента",
-                    message=metrics["intervention_message"],
-                    app_name="KPI Фокус Асистент",
-                    timeout=5,
-                )
-            except Exception as exc:
-                print(f"Не вдалося показати сповіщення: {exc}")
-
-        if metrics["should_notify"] and metrics["intervention_message"]:
+            
+            # 3. Викликаємо спливаюче вікно Windows
             try:
                 notification.notify(
                     title="Зниження концентрації",
@@ -418,7 +410,7 @@ class FocusAssistantApp(ctk.CTk):
                     timeout=5,
                 )
             except Exception as exc:
-                print(f"Не вдалося показати сповіщення: {exc}")
+                print(f"Не вдалося показати сповіщення Windows: {exc}")
 
         minutes, seconds = divmod(metrics["focus_duration_sec"], 60)
         self.stat_focus.configure(text=f"Час фокусу:\n{minutes} хв {seconds} с")

@@ -39,9 +39,9 @@ class GeminiClient:
         hour = datetime.now().hour
         if 6 <= hour < 12:
             return "ранок"
-        elif 12 <= hour < 18:
+        elif 12 <= hour < 20:
             return "день"
-        elif 18 <= hour < 22:
+        elif 20 <= hour < 23:
             return "вечір"
         else:
             return "ніч"
@@ -82,12 +82,26 @@ class GeminiClient:
         """Генерує пораду через Gemini."""
         prompt = self._build_prompt(metrics, context)
         try:
-            response = self.model.generate_content(prompt)
-            advice = response.text.strip()
+            # Перевіряємо, яку саме версію API ми використовуємо
+            if hasattr(self, 'model'):
+                # Старий API (legacy)
+                response = self.model.generate_content(prompt)
+                advice = response.text.strip()
+            elif hasattr(self, 'client'):
+                # Новий API
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt
+                )
+                advice = response.text.strip()
+            else:
+                raise ValueError("Модель ШІ не ініціалізована.")
+
             self.history.append(advice)  # Додаємо в історію
             if len(self.history) > 5:  # Обмежуємо історію
                 self.history.pop(0)
             return advice
+            
         except Exception as e:
             print(f"Помилка Gemini: {e}")
             return "Спробуйте зосередитися на завданні. Якщо втомилися — зробіть коротку перерву."

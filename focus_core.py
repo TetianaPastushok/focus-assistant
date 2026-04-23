@@ -53,6 +53,11 @@ class FocusAnalyzer:
         self.gemini_client = GeminiClient(gemini_api_key) if GeminiClient and gemini_api_key else None
         self.enable_ai = enable_ai
         self.reset(0.0)
+        self._last_ear_value = 0.5
+        self._blink_in_progress = False
+        
+        self._pending_intervention = None
+        self._pending_intervention_time = 0.0
 
     def set_enable_ai(self, enable: bool):
         """
@@ -450,11 +455,10 @@ class FocusAnalyzer:
         gaze_score = self._zone_gaze_score(zone)
         focus_score = self._compute_focus_score(gaze_score, perclos, bpm)
 
+        # Стан неуважності базується ТІЛЬКИ на позі голови та закритих очах
         inattentive = (
             zone not in self.cfg.focused_zones
             or perclos > self.cfg.perclos_high
-            or bpm < self.cfg.bpm_min
-            or bpm > self.cfg.bpm_max
         )
         continuous_inattention_sec, accumulated_inattention_sec, continuous_focus_sec = self._update_inattention_windows(
             current_time,
@@ -473,6 +477,24 @@ class FocusAnalyzer:
             bpm=bpm,
         )
 
+        # Якщо є нове повідомлення, "заморожуємо" його на 1.5 секунди для логера
+        if intervention:
+            self._pending_intervention = intervention
+            self._pending_intervention_time = current_time
+            
+        # Якщо повідомлення старе (більше 1.5 сек), очищаємо його
+        if self._pending_intervention and (current_time - self._pending_intervention_time) > 1.5:
+            self._pending_intervention = None
+            
+        # Визначаємо, що саме передавати в метрики (нове або "заморожене")
+        active_intervention = intervention or self._pending_intervention
+
+        # Захист від порожніх словників:
+        int_level = active_intervention.get("intervention_level", "") if active_intervention else ""
+        int_reason = active_intervention.get("intervention_reason", "") if active_intervention else ""
+        int_msg = active_intervention.get("intervention_message", "") if active_intervention else ""
+        int_event = active_intervention.get("event_type", "") if active_intervention else ""
+
         return {
             "zone": zone,
             "color": color,
@@ -489,11 +511,16 @@ class FocusAnalyzer:
             "mode": self.mode,
             "continuous_inattention_sec": round(continuous_inattention_sec, 2),
             "accumulated_inattention_sec": round(accumulated_inattention_sec, 2),
-            "should_notify": bool(intervention and intervention["should_notify"]),
-            "intervention_level": intervention["intervention_level"] if intervention else "",
-            "intervention_reason": intervention["intervention_reason"] if intervention else "",
-            "intervention_message": intervention["intervention_message"] if intervention else "",
-            "event_type": intervention["event_type"] if intervention else "",
+            
+            # Тільки для нотифікацій
+            "should_notify": bool(intervention and intervention.get("should_notify")),
+            
+            # Для логера
+            "intervention_level": int_level,
+            "intervention_reason": int_reason,
+            "intervention_message": int_msg,
+            "event_type": int_event,
+            
             "ear_left": left_ear if landmarks else 0.0,
             "ear_right": right_ear if landmarks else 0.0,
             "ear_active": active_ear if landmarks else 0.0,
