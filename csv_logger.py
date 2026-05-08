@@ -2,8 +2,11 @@
 
 import csv
 import time
+import logging
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class SessionCsvLogger:
@@ -53,10 +56,12 @@ class SessionCsvLogger:
             ]
         )
         self._last_second = None
+        logger.info(f"Session logging started: {actual_path}")
 
     def stop(self) -> None:
         if self._file:
             self._file.close()
+            logger.info("Session logging stopped")
         self._file = None
         self._writer = None
         self._last_second = None

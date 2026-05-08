@@ -1,10 +1,13 @@
 ﻿from collections import deque
 from math import hypot
 from typing import Optional
+import logging
 
 from config import (
     CHIN,
     FOREHEAD,
+    INNER_LEFT_EYE,
+    INNER_RIGHT_EYE,
     LEFT_CHEEK,
     LEFT_EYE,
     NOSE_TIP,
@@ -12,6 +15,8 @@ from config import (
     RIGHT_EYE,
     FocusConfig,
 )
+
+logger = logging.getLogger(__name__)
 
 try:
     from gemini_client import GeminiClient
@@ -53,11 +58,9 @@ class FocusAnalyzer:
         self.gemini_client = GeminiClient(gemini_api_key) if GeminiClient and gemini_api_key else None
         self.enable_ai = enable_ai
         self.reset(0.0)
-        self._last_ear_value = 0.5
-        self._blink_in_progress = False
-        
-        self._pending_intervention = None
-        self._pending_intervention_time = 0.0
+
+        self.eye_distance = 0.0
+        self.dist_history = deque(maxlen=5)
 
     def set_enable_ai(self, enable: bool):
         """
@@ -100,10 +103,14 @@ class FocusAnalyzer:
         self._recovered_since_critical = True
         self._zone_change_time = start_time  # Час останної зміни зони (для уникнення false blinks)
         
-        # Для виявлення моргання как переходу EAR від HIGH -> LOW -> HIGH
+        # Для виявлення моргання як переходу EAR від HIGH -> LOW -> HIGH
         self._ear_state = "OPEN"  # "OPEN" або "CLOSED"
         self._last_ear_value = 0.5
         self._blink_in_progress = False
+        
+        # Для "заморожування" повідомлень на 1.5 секунди в логері
+        self._pending_intervention = None
+        self._pending_intervention_time = 0.0
 
     @staticmethod
     def calculate_ear(landmarks, eye_indices, width: int, height: int) -> float:
@@ -166,8 +173,8 @@ class FocusAnalyzer:
         # Нормально відкриті очі: 0.2-0.35
         # Закриті очі: < 0.10
         # Для стабільності використовуємо гістерезис: 0.10 (close) до 0.15 (open)
-        open_threshold = 0.12  # Мінімум для визнання очей відкритими після закриття
-        close_threshold = 0.08  # Максимум для визнання очей закритими
+        open_threshold = 0.14  # Мінімум для визнання очей відкритими після закриття
+        close_threshold = 0.12  # Максимум для визнання очей закритими
         
         if current_ear < close_threshold:
             new_ear_state = "CLOSED"
@@ -268,29 +275,66 @@ class FocusAnalyzer:
         )
         continuous_focus_sec = 0.0 if self._continuous_focus_start is None else current_time - self._continuous_focus_start
         return continuous_inattention_sec, max(0.0, self._window_inattention_sec), continuous_focus_sec
-
+        
     def _build_intervention(self, level: str, reason: str, metrics: dict) -> dict:
-        if self.enable_ai and self.gemini_client:
-            # Динамічна порада через Gemini
-            advice = self.gemini_client.generate_advice(metrics)
-        else:
-            # Статичні повідомлення (як раніше)
-            messages = {
-                ("WARNING", "DISTRACTION"): "Ви почали відволікатися. Спробуйте повернути увагу до задачі.",
-                ("WARNING", "FATIGUE"): "Ознаки втоми очей. Переведіть погляд вдалечінь на 20 секунд.",
-                ("WARNING", "MIXED"): "Концентрація знижується. Зробіть коротку паузу на 1-2 хвилини.",
-                ("CRITICAL", "DISTRACTION"): "Стійка втрата концентрації. Рекомендовано коротку перерву 3-5 хвилин.",
-                ("CRITICAL", "FATIGUE"): "Високий рівень втоми. Зробіть перерву та вправи для очей.",
-                ("CRITICAL", "MIXED"): "Критичне падіння фокусу. Зупиніться на коротку відновлювальну перерву.",
-            }
-            advice = messages.get((level, reason), "Зосередьтеся на завданні.")
+        # Валідуємо вхідні дані
+        required_keys = {"focus_score", "perclos", "zone", "attention_state"}
+        if not required_keys.issubset(metrics.keys()):
+            missing = required_keys - set(metrics.keys())
+            logger.warning(f"Missing metrics keys in _build_intervention: {missing}")
+            # Встановлюємо дефолтні значення
+            metrics.setdefault("focus_score", 0.5)
+            metrics.setdefault("perclos", 0.0)
+            metrics.setdefault("zone", "NORMAL")
+            metrics.setdefault("attention_state", "NORMAL")
+        
+        # 1. офлайн-порада (Fallback)
+        messages = {
+            ("WARNING", "DISTRACTION"): "Ви почали відволікатися. Спробуйте повернути увагу до задачі.",
+            ("WARNING", "FATIGUE"): "Ознаки втоми очей. Переведіть погляд вдалечінь на 20 секунд.",
+            ("WARNING", "MIXED"): "Концентрація знижується. Зробіть коротку паузу на 1-2 хвилини.",
+            
+            # --- Поради для постави ---
+            ("WARNING", "BAD_POSTURE"): "Випрями спину! Занадто довго сидиш із нахиленою головою.",
+            ("CRITICAL", "BAD_POSTURE"): "Критичне навантаження на шию. Негайно вирівняй поставу та зроби розминку плечей.",
+            
+            # --- НОВЕ: Поради для дистанції ---
+            ("WARNING", "TOO_CLOSE"): "Ти занадто близько до екрана! Відсунься на безпечну відстань (60-70 см).",
+            ("CRITICAL", "TOO_CLOSE"): "Критична відстань до екрана! Це дуже шкодить очам. Негайно відсунься.",
+            
+            ("CRITICAL", "DISTRACTION"): "Стійка втрата концентрації. Рекомендовано коротку перерву 3-5 хвилин.",
+            ("CRITICAL", "FATIGUE"): "Високий рівень втоми. Зробіть перерву та вправи для очей.",
+            ("CRITICAL", "MIXED"): "Критичне падіння фокусу. Зупиніться на коротку відновлювальну перерву.",
+        }
+        
+        static_advice = messages.get((level, reason), "Зосередьтеся на завданні.")
+        final_advice = static_advice  # За замовчуванням беремо статичну пораду
 
+        # 2. Пробуємо викликати ШІ, якщо він увімкнений
+        if self.enable_ai and self.gemini_client:
+            try:
+                # ДОДАЄМО ПРИЧИНУ В СЛОВНИК ДЛЯ ШІ, щоб він розумів контекст (постава, втома тощо)
+                metrics["intervention_reason"] = reason 
+                
+                ai_advice = self.gemini_client.generate_advice(metrics)
+                
+                # Перевіряємо, чи ШІ не повернув базову заглушку через власну помилку
+                if ai_advice and not ai_advice.startswith("Спробуйте зосередитися"):
+                    final_advice = ai_advice
+                else:
+                    logger.debug("AI returned default stub. Using local advice.")
+            except Exception as e:
+                logger.error(f"Gemini API error: {e}. Using local advice.")
+                final_advice = static_advice
+
+        # 3. Формуємо фінальний словник події
         return {
             "intervention_level": level,
             "intervention_reason": reason,
-            "intervention_message": advice,
+            "intervention_message": final_advice,
             "event_type": f"{level}_{reason}",
-            "should_notify": level == "CRITICAL",
+            # Сповіщення (вікно Windows) вилазить для CRITICAL АБО для поганої постави/дистанції
+            "should_notify": level == "CRITICAL" or reason in ("BAD_POSTURE", "TOO_CLOSE"),
         }
 
     def _evaluate_attention_state(
@@ -331,12 +375,45 @@ class FocusAnalyzer:
         if current_time - self.session_start_time < self.cfg.session_warmup_sec:
             return None
 
-        if zone not in self.cfg.focused_zones and perclos > self.cfg.perclos_high:
+        # --- БАГАТОРІВНЕВА ЛОГІКА ДЛЯ ПОСТАВИ ---
+        # Використовуємо пороги з конфігу замість hardcoded констант
+        mid_down_warning_sec = self.cfg.mid_down_warning_sec
+        deep_down_warning_sec = self.cfg.deep_down_warning_sec
+        too_close_warning_sec = self.cfg.too_close_warning_sec
+        
+        # Якщо ми у стані відволікання (AWAY/TURNED або закриті очі)
+        if zone not in self.cfg.focused_zones and zone != "TOO CLOSE" and perclos > self.cfg.perclos_high:
             reason = "MIXED"
         elif perclos > self.cfg.perclos_high:
             reason = "FATIGUE"
+        elif zone not in self.cfg.focused_zones and zone != "TOO CLOSE":
+            reason = "DISTRACTION"
+            
+        # Якщо ми у сфокусованій зоні, але опустили голову АБО занадто близько
+        elif zone in ("MID DOWN", "DEEP DOWN", "TOO CLOSE"):
+             is_bad_posture = False
+             reason_temp = "DISTRACTION"
+             
+             if zone == "TOO CLOSE" and continuous_inattention_sec >= too_close_warning_sec:
+                 is_bad_posture = True
+                 reason_temp = "TOO_CLOSE"
+             elif zone == "DEEP DOWN" and continuous_inattention_sec >= deep_down_warning_sec:
+                 is_bad_posture = True
+                 reason_temp = "BAD_POSTURE"
+             elif zone == "MID DOWN" and continuous_inattention_sec >= mid_down_warning_sec:
+                 is_bad_posture = True
+                 reason_temp = "BAD_POSTURE"
+                 
+             if is_bad_posture:
+                  reason = reason_temp
+                  # Примусово змінюємо статус, щоб тригернути повідомлення
+                  if self.attention_state == "NORMAL":
+                      self.attention_state = "WARNING"
+             else:
+                  reason = "DISTRACTION" # Дефолтне значення, поки час не вийшов
         else:
             reason = "DISTRACTION"
+
 
         if self.attention_state == "WARNING" and prev_state == "NORMAL":
             if current_time - self._last_warning_time >= self.cfg.warning_cooldown_sec:
@@ -377,6 +454,7 @@ class FocusAnalyzer:
             "LOOKING UP": 0.5,
             "AWAY/TURNED": 0.0,
             "NO FACE": 0.0,
+            "TOO CLOSE": 0.6,
         }
         return zone_scores.get(zone, 0.0)
 
@@ -412,7 +490,8 @@ class FocusAnalyzer:
         left_ear = 0.0
         right_ear = 0.0
         active_ear = 0.0
-
+        
+        
         if landmarks is not None:
             pitch, yaw = self.get_head_pose(landmarks)
             pitch, yaw = self._smooth_pose(pitch, yaw)
@@ -420,6 +499,20 @@ class FocusAnalyzer:
             right_ear = self.calculate_ear(landmarks, RIGHT_EYE, width, height)
             active_ear = max(left_ear, right_ear) if yaw > self.cfg.yaw_limit else (left_ear + right_ear) / 2.0
             raw_zone, raw_color, raw_threshold = self._classify_zone(pitch, yaw)
+            
+            # --- Розрахунок відстані до екрана ---
+            dx = (landmarks[INNER_LEFT_EYE].x - landmarks[INNER_RIGHT_EYE].x) * width
+            dy = (landmarks[INNER_LEFT_EYE].y - landmarks[INNER_RIGHT_EYE].y) * height
+            dist_px = hypot(dx, dy)
+            self.dist_history.append(dist_px)
+            self.eye_distance = sum(self.dist_history) / len(self.dist_history)
+            
+            # Перевизначаємо зону, якщо занадто близько (тільки якщо ми не відвернулися вбік)
+            if self.eye_distance > self.cfg.too_close_distance_px and raw_zone != "AWAY/TURNED":
+                raw_zone = "TOO CLOSE"
+                raw_color = (0, 165, 255)  # Оранжевий колір (BGR: 255, 165, 0)
+            # --------------------------------------------
+
             zone, color, threshold = self._apply_away_hold(current_time, raw_zone, raw_color, raw_threshold)
 
             is_closed = 1 if active_ear < threshold else 0
@@ -455,9 +548,10 @@ class FocusAnalyzer:
         gaze_score = self._zone_gaze_score(zone)
         focus_score = self._compute_focus_score(gaze_score, perclos, bpm)
 
-        # Стан неуважності базується ТІЛЬКИ на позі голови та закритих очах
+        # Стан неуважності базується на позі голови, закритих очах, поганій поставі АБО якщо занадто близько
         inattentive = (
             zone not in self.cfg.focused_zones
+            or zone in ("MID DOWN", "DEEP DOWN", "TOO CLOSE")  
             or perclos > self.cfg.perclos_high
         )
         continuous_inattention_sec, accumulated_inattention_sec, continuous_focus_sec = self._update_inattention_windows(
@@ -524,4 +618,5 @@ class FocusAnalyzer:
             "ear_left": left_ear if landmarks else 0.0,
             "ear_right": right_ear if landmarks else 0.0,
             "ear_active": active_ear if landmarks else 0.0,
+            "eye_distance": round(self.eye_distance, 1),
         }

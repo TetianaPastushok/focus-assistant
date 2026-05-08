@@ -2,6 +2,7 @@
 from typing import Optional
 
 
+# MediaPipe Face Mesh landmarks
 LEFT_EYE = [33, 160, 158, 133, 153, 144]
 RIGHT_EYE = [362, 385, 387, 263, 373, 380]
 NOSE_TIP = 1
@@ -9,6 +10,8 @@ CHIN = 152
 FOREHEAD = 10
 LEFT_CHEEK = 234
 RIGHT_CHEEK = 454
+INNER_LEFT_EYE = 263  # For eye distance calculation
+INNER_RIGHT_EYE = 33  # For eye distance calculation
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,12 @@ class FocusConfig:
     recovery_reset_sec: int = 6  # 6 сек зосередженості перед скиданням
     pose_smoothing_frames: int = 15  # Збільшуємо з 7 до 15 для стабільнішої класифікації зони
     away_hold_sec: float = 2.0
+
+    # Posture warning thresholds (seconds of continuous bad posture)
+    mid_down_warning_sec: float = 45.0  # Light head tilt - warn after 45 sec
+    deep_down_warning_sec: float = 20.0  # Heavy head tilt - warn after 20 sec
+    too_close_warning_sec: float = 15.0  # Too close to screen - warn after 15 sec
+    too_close_distance_px: float = 180.0  # Pixel threshold for too-close face detection
 
     # "assistant" -> interventions enabled, "baseline" -> only measurement
     experiment_mode: str = "assistant"

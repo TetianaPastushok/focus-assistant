@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import time
+import logging
 from datetime import datetime
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     from google import genai
@@ -45,7 +48,7 @@ class GeminiClient:
             return "вечір"
         else:
             return "ніч"
-
+            
     def _build_prompt(self, metrics: dict, context: Optional[dict] = None) -> str:
         """Будує промпт для Gemini на основі метрик."""
         time_of_day = self._get_time_of_day()
@@ -56,25 +59,38 @@ class GeminiClient:
         attention_state = metrics.get("attention_state", "NORMAL")
         continuous_inattention = metrics.get("continuous_inattention_sec", 0)
         distractions = metrics.get("distractions", 0)
+        
+        # Отримуємо головну причину тригеру (відволікання, втома або постава)
+        reason = metrics.get("intervention_reason", "UNKNOWN")
 
         # Контекст: попередні поради, щоб уникнути повторів
         prev_advice = "; ".join(self.history[-3:]) if self.history else "немає"
 
         prompt = f"""
-Ти — інтелектуальний асистент для підтримки продуктивності. Давай коротку пораду (1-2 речення) українською мовою на основі даних користувача.
+Ти — турботливий інтелектуальний асистент для підтримки продуктивності. Давай коротку пораду (1-2 речення) українською мовою на основі даних користувача.
 Уникай повторення попередніх порад: {prev_advice}.
 
-Дані:
+ГОЛОВНА ПРИЧИНА ЗВЕРНЕННЯ ДО КОРИСТУВАЧА: {reason}
+(Де коди означають: 
+BAD_POSTURE - довго сидить з нахиленою головою/сутулиться, 
+FATIGUE - закриває очі/впадає в мікросон, 
+DISTRACTION - дивиться вбік,
+TOO_CLOSE - сидить аномально близько до екрана).
+
+Поточні дані:
 - Час доби: {time_of_day}
 - Рівень фокусу: {focus_score:.2f} (0-1, де 1 — ідеальний)
-- PERCLOS: {perclos:.1f}% (відсоток закритих очей, >15% — втома)
-- BPM: {bpm} (моргання за хвилину, норма 8-25)
-- Зона: {zone} (NORMAL — добре, інші — відволікання)
-- Стан уваги: {attention_state} (NORMAL, WARNING, CRITICAL)
-- Безперервне відволікання: {continuous_inattention:.1f} с
-- Загальні відволікання: {distractions}
+- PERCLOS (втома): {perclos:.1f}%
+- BPM (моргання): {bpm}
+- Зона погляду: {zone}
+- Стан уваги: {attention_state}
 
-Порада має бути мотиваційною, конкретною та адаптованою до часу доби. Якщо пізно — радь відпочити. Якщо низький фокус — пропоную перерву або вправу.
+ПРАВИЛА ГЕНЕРАЦІЇ ПОРАДИ:
+1. Якщо причина BAD_POSTURE: ОБОВ'ЯЗКОВО скажи вирівняти спину, підняти голову або розім'яти шию.
+2. Якщо причина FATIGUE: порадь покліпати, подивитися вдалечінь або зробити гімнастику для очей.
+3. Якщо причина DISTRACTION: м'яко нагадай повернутися до роботи.
+4. Якщо причина TOO_CLOSE: терміново попроси відсунутися від екрана на безпечну відстань (60-70 см), щоб захистити зір.
+5. Порада має бути емпатичною, дружньою та, за потреби, мотиваційною. Без зайвої води та вітань.
 """
         return prompt.strip()
 
@@ -103,13 +119,12 @@ class GeminiClient:
             return advice
             
         except Exception as e:
-            print(f"Помилка Gemini: {e}")
+            logger.error(f"Gemini error: {e}")
             return "Спробуйте зосередитися на завданні. Якщо втомилися — зробіть коротку перерву."
 
 
-# Приклад використання
 if __name__ == "__main__":
-    # Замініть на свій API ключ
+    
     client = GeminiClient(api_key="YOUR_API_KEY")
     sample_metrics = {
         "focus_score": 0.4,

@@ -1,4 +1,5 @@
 ﻿import time
+import logging
 
 import customtkinter as ctk
 import cv2
@@ -11,6 +12,14 @@ from csv_logger import SessionCsvLogger
 from focus_core import FocusAnalyzer
 from text_render import draw_unicode_text
 from tray_manager import TrayManager
+
+# Setup logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 
 ctk.set_appearance_mode("light")
@@ -287,6 +296,14 @@ class FocusAssistantApp(ctk.CTk):
             # Prefer a standard webcam resolution for a better head-and-shoulders preview
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            
+            # Verify that resolution was set correctly
+            actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if actual_width < 640 or actual_height < 480:
+                print(f"[WARNING] Camera resolution lower than expected: {actual_width}x{actual_height}")
+            else:
+                print(f"[DEBUG] Camera initialized at {actual_width}x{actual_height}")
 
             self.face_mesh = mp.solutions.face_mesh.FaceMesh(
                 max_num_faces=1,
@@ -294,6 +311,7 @@ class FocusAssistantApp(ctk.CTk):
                 min_detection_confidence=0.7,
             )
         except Exception as e:
+            logger.error(f"Camera initialization error: {str(e)}")
             self.video_label.configure(text=f"Помилка ініціалізації: {str(e)}", image=None)
             if self.cap:
                 self.cap.release()
@@ -311,6 +329,9 @@ class FocusAssistantApp(ctk.CTk):
         self.update_frame()
 
     def stop_session(self):
+        if not self.is_running:
+            return  # Already stopped
+            
         self.is_running = False
         self.tray.update_session_state(False)
         self.start_btn.configure(state="normal")
@@ -380,6 +401,8 @@ class FocusAssistantApp(ctk.CTk):
         landmarks = None
         if results.multi_face_landmarks:
             landmarks = results.multi_face_landmarks[0].landmark
+        elif self._frame_debug_counter % 30 == 0:
+            print("[DEBUG] No face detected in frame")
 
         metrics = self.analyzer.process(landmarks, w, h, current_time)
 
@@ -393,10 +416,10 @@ class FocusAssistantApp(ctk.CTk):
             font_size=32,
         )
 
-        # DEBUG: Показуємо информацію про міцність у консоль
+        # DEBUG: Показуємо информацію про втручання
         if metrics.get("should_notify") and metrics.get("intervention_message"):
-            # 1. Друкуємо в консоль для дебагу один раз
-            print(f"[INTERVENTION] {metrics['intervention_level']}: {metrics['intervention_message']}")
+            # 1. Логуємо для дебагу
+            logger.info(f"[INTERVENTION] {metrics['intervention_level']}: {metrics['intervention_message']}")
             
             # 2. Відправляємо тихе сповіщення в системний трей
             self.tray.notify("Порада асистента", metrics["intervention_message"])
@@ -410,7 +433,7 @@ class FocusAssistantApp(ctk.CTk):
                     timeout=5,
                 )
             except Exception as exc:
-                print(f"Не вдалося показати сповіщення Windows: {exc}")
+                logger.warning(f"Failed to show Windows notification: {exc}")
 
         minutes, seconds = divmod(metrics["focus_duration_sec"], 60)
         self.stat_focus.configure(text=f"Час фокусу:\n{minutes} хв {seconds} с")
@@ -426,7 +449,9 @@ class FocusAssistantApp(ctk.CTk):
         # DEBUG: Логування для налагодження
         self._frame_debug_counter += 1
         if self._frame_debug_counter % 30 == 0:
-            print(f"[DEBUG] Focus: {metrics['focus_score']:.2f} | PERCLOS: {metrics['perclos']:.1f}% | EAR: L={metrics['ear_left']:.3f} R={metrics['ear_right']:.3f} | Blinks: {metrics['blinks_total']} | Zone: {metrics['zone']} | State: {metrics['attention_state']}")
+            logger.debug(f"Focus: {metrics['focus_score']:.2f} | PERCLOS: {metrics['perclos']:.1f}% | "
+                        f"EAR: L={metrics['ear_left']:.3f} R={metrics['ear_right']:.3f} | "
+                        f"Blinks: {metrics['blinks_total']} | Zone: {metrics['zone']} | State: {metrics['attention_state']}")
 
         self.csv_logger.log_once_per_second(current_time, metrics)
 
