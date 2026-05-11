@@ -19,9 +19,9 @@ class FocusConfig:
     thresh_normal: float = 0.15
     thresh_mid_down: float = 0.12
     thresh_deep_down: float = 0.09
-    pitch_limit_up: float = 1.25
+    pitch_limit_up: float = 1.20
     pitch_limit_mid: float = 0.75
-    pitch_limit_deep: float = 0.60
+    pitch_limit_deep: float = 0.70
     yaw_limit: float = 0.30
     consec_frames: int = 2
     bpm_min: int = 8
@@ -36,7 +36,7 @@ class FocusConfig:
     focus_w_alertness: float = 0.3
 
     # Adaptive intervention logic
-    session_warmup_sec: int = 25  # Дозволяємо користувачу розправитися перед перевіркою
+    session_warmup_sec: int = 10  # Дозволяємо користувачу розправитися перед перевіркою
     warning_grace_sec: int = 10  # Час безперервної втрати уваги до WARNING
     warning_accum_sec: int = 16  # Накопичуємо 16 сек втрати перед попередженням
     warning_window_sec: int = 20

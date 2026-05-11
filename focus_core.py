@@ -2,6 +2,8 @@
 from math import hypot
 from typing import Optional
 import logging
+import threading
+import queue
 
 from config import (
     CHIN,
@@ -57,10 +59,13 @@ class FocusAnalyzer:
         self.mode = mode or self.cfg.experiment_mode
         self.gemini_client = GeminiClient(gemini_api_key) if GeminiClient and gemini_api_key else None
         self.enable_ai = enable_ai
-        self.reset(0.0)
-
+        
+        self._start_time = 0.0
         self.eye_distance = 0.0
         self.dist_history = deque(maxlen=5)
+        self._intervention_queue = queue.Queue()
+
+        self.reset(0.0)
 
     def set_enable_ai(self, enable: bool):
         """
@@ -75,6 +80,7 @@ class FocusAnalyzer:
         if mode is not None:
             self.mode = mode
 
+        self._start_time = start_time
         self.session_start_time = start_time
         self.blink_count = 0
         self.distraction_count = 0
@@ -276,6 +282,11 @@ class FocusAnalyzer:
         continuous_focus_sec = 0.0 if self._continuous_focus_start is None else current_time - self._continuous_focus_start
         return continuous_inattention_sec, max(0.0, self._window_inattention_sec), continuous_focus_sec
         
+    def _fetch_intervention_async(self, level: str, reason: str, metrics: dict):
+        """Викликає ШІ у фоновому потоці, щоб не блокувати камеру."""
+        result = self._build_intervention(level, reason, metrics)
+        self._intervention_queue.put(result)
+    
     def _build_intervention(self, level: str, reason: str, metrics: dict) -> dict:
         # Валідуємо вхідні дані
         required_keys = {"focus_score", "perclos", "zone", "attention_state"}
@@ -418,32 +429,30 @@ class FocusAnalyzer:
         if self.attention_state == "WARNING" and prev_state == "NORMAL":
             if current_time - self._last_warning_time >= self.cfg.warning_cooldown_sec:
                 self._last_warning_time = current_time
-                return self._build_intervention("WARNING", reason, {
-                    "focus_score": focus_score,
-                    "perclos": perclos,
-                    "bpm": bpm,
-                    "zone": zone,
-                    "attention_state": self.attention_state,
+                metrics_dict = {
+                    "focus_score": focus_score, "perclos": perclos, "bpm": bpm,
+                    "zone": zone, "attention_state": self.attention_state,
                     "continuous_inattention_sec": continuous_inattention_sec,
                     "distractions": self.distraction_count,
-                })
+                }
+                # Запускаємо фоновий потік замість блокування!
+                threading.Thread(target=self._fetch_intervention_async, args=("WARNING", reason, metrics_dict), daemon=True).start()
+                return None
 
         if self.attention_state == "CRITICAL" and prev_state != "CRITICAL":
             cooldown_ready = (current_time - self._last_critical_time) >= self.cfg.critical_cooldown_sec
             if cooldown_ready or self._recovered_since_critical:
                 self._last_critical_time = current_time
                 self._recovered_since_critical = False
-                return self._build_intervention("CRITICAL", reason, {
-                    "focus_score": focus_score,
-                    "perclos": perclos,
-                    "bpm": bpm,
-                    "zone": zone,
-                    "attention_state": self.attention_state,
+                metrics_dict = {
+                    "focus_score": focus_score, "perclos": perclos, "bpm": bpm,
+                    "zone": zone, "attention_state": self.attention_state,
                     "continuous_inattention_sec": continuous_inattention_sec,
                     "distractions": self.distraction_count,
-                })
-
-        return None
+                }
+                # Запускаємо фоновий потік!
+                threading.Thread(target=self._fetch_intervention_async, args=("CRITICAL", reason, metrics_dict), daemon=True).start()
+                return None
 
     def _zone_gaze_score(self, zone: str) -> float:
         """Convert the detected head/gaze zone into a normalized gaze score."""
@@ -483,6 +492,36 @@ class FocusAnalyzer:
         Returns:
             dict: Analysis results including zone, metrics, and intervention data.
         """
+        elapsed = current_time - self._start_time
+        if elapsed < self.cfg.session_warmup_sec:
+            return {
+                "zone": "WARMUP",
+                "color": (150, 150, 150),  # Сірий колір для підготовки
+                "pitch": 0.0,
+                "yaw": 0.0,
+                "bpm": 0,
+                "perclos": 0.0,
+                "focus_score": 1.0,
+                "gaze_score": 1.0,
+                "focus_duration_sec": int(elapsed),
+                "distractions": 0,
+                "blinks_total": 0,
+                "attention_state": "INITIALIZING",
+                "mode": self.mode,
+                "continuous_inattention_sec": 0.0,
+                "accumulated_inattention_sec": 0.0,
+                "should_notify": False,
+                "intervention_level": "",
+                "intervention_reason": "",
+                "intervention_message": "",
+                "event_type": "",
+                "ear_left": 0.0,
+                "ear_right": 0.0,
+                "ear_active": 0.0,
+                "eye_distance": 0.0,
+            }
+        
+    
         zone = "NO FACE"
         color = (255, 0, 0)
         pitch = 0.0
@@ -570,6 +609,12 @@ class FocusAnalyzer:
             focus_score=focus_score,
             bpm=bpm,
         )
+
+        try:
+            queued_intervention = self._intervention_queue.get_nowait()
+            intervention = queued_intervention
+        except queue.Empty:
+            pass
 
         # Якщо є нове повідомлення, "заморожуємо" його на 1.5 секунди для логера
         if intervention:
