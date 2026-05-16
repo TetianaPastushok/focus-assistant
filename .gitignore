@@ -1,3 +1,31 @@
+# Віртуальне середовище
 venv310/
+venv/
+env/
+
+# Кеш Python та системні файли
 __pycache__/
+*.pyc
+.pytest_cache/
+
+# Збірки та бінарники
+build/
+dist/
+dist_app/
+*.exe
+*.spec
+
+# Логи, звіти та дані
+logs/
+test_report/
 *.csv
+*.log
+
+# Безпека 
+.env
+
+# Графіки та документи диплома
+diploma_graphs/
+diploma_pictures/
+Effectiveness_graphs/
+ПЗ/
