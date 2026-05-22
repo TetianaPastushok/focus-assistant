@@ -3,7 +3,7 @@
 from csv_logger import SessionCsvLogger
 import time
 
-# Тест логування
+# Сценарій перевірки функціональності запису сесійних даних у CSV
 logger = SessionCsvLogger('test_session.csv')
 logger.start()
 

@@ -1,4 +1,10 @@
-﻿import time
+﻿"""Main GUI application for the KPI Focus Assistant diploma project.
+
+This module initializes the desktop interface, configures logging, and manages
+real-time attention monitoring and intervention presentation.
+"""
+
+import time
 import logging
 
 import customtkinter as ctk
@@ -13,7 +19,7 @@ from focus_core import FocusAnalyzer
 from text_render import draw_unicode_text
 from tray_manager import TrayManager
 
-# Setup logging
+# Configure application logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='[%(asctime)s] %(levelname)s: %(message)s',
@@ -67,7 +73,7 @@ class FocusAssistantApp(ctk.CTk):
         self.cap = None
         self.face_mesh = None
         self._frame_image = None
-        self._frame_debug_counter = 0  # Для налагодження
+        self._frame_debug_counter = 0  # Лічильник кадрів для періодичного інформаційного логування
 
         self.tray = TrayManager(
             title="KPI Фокус Асистент",
@@ -304,9 +310,9 @@ class FocusAssistantApp(ctk.CTk):
             actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             if actual_width < 640 or actual_height < 480:
-                print(f"[WARNING] Camera resolution lower than expected: {actual_width}x{actual_height}")
+                logger.warning(f"Camera resolution lower than expected: {actual_width}x{actual_height}")
             else:
-                print(f"[DEBUG] Camera initialized at {actual_width}x{actual_height}")
+                logger.debug(f"Camera initialized at {actual_width}x{actual_height}")
 
             self.face_mesh = mp.solutions.face_mesh.FaceMesh(
                 max_num_faces=1,
@@ -405,7 +411,7 @@ class FocusAssistantApp(ctk.CTk):
         if results.multi_face_landmarks:
             landmarks = results.multi_face_landmarks[0].landmark
         elif self._frame_debug_counter % 30 == 0:
-            print("[DEBUG] No face detected in frame")
+            logger.debug("No face detected in the current frame")
 
         metrics = self.analyzer.process(landmarks, w, h, current_time)
 
@@ -419,12 +425,12 @@ class FocusAssistantApp(ctk.CTk):
             font_size=32,
         )
 
-        # DEBUG: Показуємо информацію про втручання
+        # Відображення та логування повідомлень про інтервенцію асистента
         if metrics.get("should_notify") and metrics.get("intervention_message"):
-            # 1. Логуємо для дебагу
+            # Логування інтервенцій для подальшого аналізу ефективності
             logger.info(f"[INTERVENTION] {metrics['intervention_level']}: {metrics['intervention_message']}")
             
-            # 2. Відправляємо тихе сповіщення в системний трей
+            # Відправляємо тихе сповіщення в системний трей
             self.tray.notify("Порада асистента", metrics["intervention_message"])
             
             # 3. Викликаємо спливаюче вікно Windows
@@ -449,7 +455,7 @@ class FocusAssistantApp(ctk.CTk):
         self.stat_attention.configure(text=f"Стан: {state_label}")
         self.stat_zone.configure(text=f"Зона: {zone_label}")
 
-        # DEBUG: Логування для налагодження
+        # Періодичне інформативне логування ключових метрик стану уваги
         self._frame_debug_counter += 1
         if self._frame_debug_counter % 30 == 0:
             logger.debug(f"Focus: {metrics['focus_score']:.2f} | PERCLOS: {metrics['perclos']:.1f}% | "

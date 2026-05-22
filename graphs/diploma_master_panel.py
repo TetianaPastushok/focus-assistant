@@ -4,7 +4,7 @@ import seaborn as sns
 import numpy as np
 from pathlib import Path
 
-# 1. ТЕХНІЧНІ НАЛАШТУВАННЯ
+# Налаштування стилю візуалізації та палітри для дипломної аналітики
 sns.set_theme(style="whitegrid", font_scale=1.1)
 COLOR_BASE = "#D3D3D3"  # Світло-сірий (Baseline)
 COLOR_ASSIST = "#5C4033" # Шоколадний (Assistant)

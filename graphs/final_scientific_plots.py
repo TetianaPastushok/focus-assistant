@@ -4,7 +4,7 @@ import seaborn as sns
 import numpy as np
 from pathlib import Path
 
-# 1. НАЛАШТУВАННЯ ТА ШЛЯХИ
+# Налаштування стилю візуалізації та шляхів до даних для підсумкової дипломної аналітики
 sns.set_theme(style="white", font_scale=1.1)
 MATTE_BLACK = "#1c1c1c"
 LIGHT_GRAY = "#D3D3D3"

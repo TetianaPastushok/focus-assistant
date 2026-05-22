@@ -41,7 +41,7 @@ class FocusAssistantApp(ctk.CTk):
         self.main_frame.grid_rowconfigure(0, weight=1) 
         self.main_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-        # Заглушка для відео з камери
+        # Шаблонне відображення відеопотоку для тестового інтерфейсу
         self.video_label = ctk.CTkLabel(self.main_frame, text="Тут буде відео з веб-камери\n(Очікування запуску...)", 
                                         fg_color="gray15", corner_radius=10, font=ctk.CTkFont(size=18))
         self.video_label.grid(row=0, column=0, columnspan=4, sticky="nsew", padx=20, pady=20)

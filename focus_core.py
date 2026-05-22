@@ -329,11 +329,11 @@ class FocusAnalyzer:
                 
                 ai_advice = self.gemini_client.generate_advice(metrics)
                 
-                # Перевіряємо, чи ШІ не повернув базову заглушку через власну помилку
+                # Перевіряємо, чи AI-порада є релевантною, і за необхідності повертаємо локальний рекомендаційний шаблон
                 if ai_advice and not ai_advice.startswith("Спробуйте зосередитися"):
                     final_advice = ai_advice
                 else:
-                    logger.debug("AI returned default stub. Using local advice.")
+                    logger.debug("AI returned fallback advice; using local static advice.")
             except Exception as e:
                 logger.error(f"Gemini API error: {e}. Using local advice.")
                 final_advice = static_advice
