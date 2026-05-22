@@ -27,17 +27,20 @@ ctk.set_default_color_theme("blue")
 
 
 ZONE_UA = {
-    "NORMAL": "НОРМА",
-    "MID DOWN": "НИЖЧЕ НОРМИ",
-    "DEEP DOWN": "СИЛЬНО ВНИЗ",
-    "LOOKING UP": "ПОГЛЯД ВГОРУ",
-    "AWAY/TURNED": "ВІДВЕРНУВСЯ",
-    "NO FACE": "ОБЛИЧЧЯ НЕМАЄ",
+    "NORMAL": "Норма",
+    "MID DOWN": "Нахил вниз",
+    "DEEP DOWN": "Критичний нахил",
+    "LOOKING UP": "Погляд вгору",
+    "AWAY/TURNED": "Відсутній",
+    "NO FACE": "Обличчя не виявлено",
+    "TOO CLOSE": "Занадто близько",
+    "WARMUP": "Калібрування",
 }
 ATTENTION_STATE_UA = {
-    "NORMAL": "НОРМА",
-    "WARNING": "ПОПЕРЕДЖЕННЯ",
-    "CRITICAL": "КРИТИЧНО",
+    "INITIALIZING": "Ініціалізація",
+    "NORMAL": "Норма",
+    "WARNING": "Попередження",
+    "CRITICAL": "Критично",
 }
 MODE_UA = {
     "assistant": "З асистентом",

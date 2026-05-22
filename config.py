@@ -20,7 +20,7 @@ class FocusConfig:
     thresh_mid_down: float = 0.12
     thresh_deep_down: float = 0.09
     pitch_limit_up: float = 1.20
-    pitch_limit_mid: float = 0.75
+    pitch_limit_mid: float = 0.80
     pitch_limit_deep: float = 0.70
     yaw_limit: float = 0.30
     consec_frames: int = 2
@@ -60,4 +60,4 @@ class FocusConfig:
     focused_zones: tuple[str, ...] = ("NORMAL", "MID DOWN", "DEEP DOWN")
 
     # Gemini API key (optional, for dynamic advice)
-    gemini_api_key: Optional[str] = "AIzaSyAaA55EWsvyW5SFV6jwDTnNu5V7gQiHbrg"
+    gemini_api_key: Optional[str] = "Ваш_ключ_тут_або_залиште_порожнім"

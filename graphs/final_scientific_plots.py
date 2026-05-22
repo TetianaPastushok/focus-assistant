@@ -11,6 +11,7 @@ LIGHT_GRAY = "#D3D3D3"
 CHOCOLATE_BROWN = "#5C4033"
 palette = [LIGHT_GRAY, CHOCOLATE_BROWN]
 
+# Твої файли (всі 7 для загальної статистики)
 baselines = [
     r"C:\Users\Tetiana\Desktop\diplom_project\logs\baseline_1(2026-05-06_21.36.45).csv",
     r"C:\Users\Tetiana\Desktop\diplom_project\logs\baseline_2(2026-05-07_19.21.06).csv",

@@ -6,6 +6,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+STATE_LABELS = {
+    "NORMAL": "НОРМА",
+    "WARNING": "ПОПЕРЕДЖЕННЯ",
+    "CRITICAL": "КРИТИЧНО",
+}
+
 BASELINE_FILES = [
     "logs/baseline_1(2026-05-06_21.36.45).csv",
     "logs/baseline_2(2026-05-07_19.21.06).csv",
@@ -133,11 +139,12 @@ def build_group_comparison_plots(baseline: dict[str, float], assistant: dict[str
     def save_bar_plot(values: list[float], title: str, ylabel: str, filename: str, fmt: str = "{:.2f}"):
         fig, ax = plt.subplots(figsize=(8, 5))
         bars = ax.bar(labels, values, color=["#d62728", "#2ca02c"])
-        ax.set_title(title)
-        ax.set_ylabel(ylabel)
+        ax.set_title(title, fontsize=16, fontweight="bold")
+        ax.set_ylabel(ylabel, fontsize=14)
+        ax.tick_params(axis="both", labelsize=12)
         ax.grid(axis="y", alpha=0.25)
         for bar, value in zip(bars, values):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02 * max(values), fmt.format(value), ha="center", va="bottom", fontweight="bold")
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02 * max(values), fmt.format(value), ha="center", va="bottom", fontweight="bold", fontsize=12)
         fig.tight_layout()
         fig.savefig(output_dir / filename, dpi=150)
         plt.close(fig)
@@ -152,7 +159,7 @@ def build_group_comparison_plots(baseline: dict[str, float], assistant: dict[str
     save_bar_plot(
         [baseline["avg_perclos"], assistant["avg_perclos"]],
         "Середній PERCLOS",
-        "PERCLOS (%)",
+        "PERCLOS — відсоток закриття повік (%)",
         "comparison_perclos.png",
     )
     save_bar_plot(
@@ -183,15 +190,30 @@ def build_group_comparison_plots(baseline: dict[str, float], assistant: dict[str
     ax.bar(x - width / 2, baseline_values, width, label="Baseline", color="#d62728")
     ax.bar(x + width / 2, assistant_values, width, label="Assistant", color="#2ca02c")
     ax.set_xticks(x)
-    ax.set_xticklabels(["NORMAL", "WARNING", "CRITICAL"])
-    ax.set_ylabel("% часу")
-    ax.set_title("Порівняння частки часу у станах уваги")
-    ax.legend()
+    ax.set_xticklabels(
+    [
+        STATE_LABELS["NORMAL"],
+        STATE_LABELS["WARNING"],
+        STATE_LABELS["CRITICAL"],
+    ],
+    fontsize=12,
+)
+    ax.set_ylabel("Частка часу у стані уваги (% від тривалості сесії)", fontsize=14)
+    ax.set_title("Порівняння частки часу у станах уваги", fontsize=16, fontweight="bold")
+    ax.legend(fontsize=12)
+    ax.tick_params(axis="both", labelsize=12)
     ax.grid(axis="y", alpha=0.25)
     for i, (b, a) in enumerate(zip(baseline_values, assistant_values)):
-        ax.text(i - width / 2, b + 0.5, f"{b:.1f}%", ha="center", va="bottom", fontweight="bold")
-        ax.text(i + width / 2, a + 0.5, f"{a:.1f}%", ha="center", va="bottom", fontweight="bold")
-    fig.tight_layout()
+        ax.text(i - width / 2, b + 0.5, f"{b:.1f}%", ha="center", va="bottom", fontweight="bold", fontsize=12)
+        ax.text(i + width / 2, a + 0.5, f"{a:.1f}%", ha="center", va="bottom", fontweight="bold", fontsize=12)
+    fig.text(
+        0.5,
+        0.02,
+        "Відсоток часу сесії, проведений у відповідному стані уваги: NORMAL = нормальна увага, WARNING = попередження, CRITICAL = критичне зниження.",
+        ha="center",
+        fontsize=11,
+    )
+    fig.tight_layout(rect=[0, 0.06, 1, 1])
     fig.savefig(output_dir / "comparison_attention_states.png", dpi=150)
     plt.close(fig)
 
@@ -209,14 +231,15 @@ def build_time_series_comparison_plots(baseline_paths: list[Path], assistant_pat
         baseline_curve = group_average_curve(baseline_paths, column)
         assistant_curve = group_average_curve(assistant_paths, column)
         fig, ax = plt.subplots(figsize=(14, 7))
-        ax.plot(x, baseline_curve, label="Baseline", color="#d62728", linewidth=2)
-        ax.plot(x, assistant_curve, label="Assistant", color="#2ca02c", linewidth=2)
-        ax.set_title(f"{ylabel} по часу сесії")
-        ax.set_xlabel("Час (хв)")
-        ax.set_ylabel(ylabel)
+        ax.plot(x, baseline_curve, label="Baseline", color="#d62728", linewidth=3)
+        ax.plot(x, assistant_curve, label="Assistant", color="#2ca02c", linewidth=3)
+        ax.set_title(f"{ylabel} по часу сесії", fontsize=18, fontweight="bold")
+        ax.set_xlabel("Час (хв)", fontsize=14)
+        ax.set_ylabel(ylabel, fontsize=14)
+        ax.tick_params(axis="both", labelsize=12)
         if ymin is not None and ymax is not None:
             ax.set_ylim(ymin, ymax)
-        ax.legend()
+        ax.legend(fontsize=12)
         ax.grid(alpha=0.25)
         fig.tight_layout()
         fig.savefig(output_dir / filename, dpi=150)
@@ -276,8 +299,13 @@ def build_attention_state_histogram(baseline_paths: list[Path], assistant_paths:
         assistant_val = assistant_pct[state]
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.bar(['Baseline', 'Assistant'], [baseline_val, assistant_val], color=['#d62728', '#2ca02c'])
-        ax.set_title(f"Частка часу у стані {state}")
-        ax.set_ylabel("% часу")
+        ax.set_title(
+        f"Частка часу у стані {STATE_LABELS[state]}",
+        fontsize=16,
+        fontweight='bold'
+)
+        ax.set_ylabel("Частка часу у стані (%)", fontsize=14)
+        ax.tick_params(axis='both', labelsize=12)
         
         # Динамічний масштаб для кращої видимості
         max_val = max(baseline_val, assistant_val)
@@ -291,9 +319,9 @@ def build_attention_state_histogram(baseline_paths: list[Path], assistant_paths:
         ax.grid(axis="y", alpha=0.25)
         for i, v in enumerate([baseline_val, assistant_val]):
             if state == "NORMAL" and v > 80:
-                ax.text(i, v - 1, f"{v:.1f}%", ha="center", va="top", fontweight="bold", color="white")
+                ax.text(i, v - 1, f"{v:.1f}%", ha="center", va="top", fontweight="bold", color="white", fontsize=12)
             else:
-                ax.text(i, v + (max_val * 0.05), f"{v:.1f}%", ha="center", va="bottom", fontweight="bold")
+                ax.text(i, v + (max_val * 0.05), f"{v:.1f}%", ha="center", va="bottom", fontweight="bold", fontsize=12)
         fig.tight_layout()
         fig.savefig(output_dir / f"attention_state_{state.lower()}.png", dpi=150)
         plt.close(fig)
@@ -316,14 +344,15 @@ def build_accumulated_inattention_plots(baseline_paths: list[Path], assistant_pa
     fig, ax = plt.subplots(figsize=(12, 6))
     for name, series, time_ax in baseline_data:
         if not series.empty:
-            ax.plot(time_ax, series, color="#d62728", alpha=0.4, linewidth=3, label="Baseline" if name == baseline_data[0][0] else "")
+            ax.plot(time_ax, series, color="#d62728", linewidth=3, label="Baseline" if name == baseline_data[0][0] else "")
     for name, series, time_ax in assistant_data:
         if not series.empty:
-            ax.plot(time_ax, series, color="#2ca02c", alpha=0.4, linewidth=3, label="Assistant" if name == assistant_data[0][0] else "")
-    ax.set_title("Accumulated Inattention — наростаючий (Baseline vs Assistant)")
-    ax.set_xlabel(f"Час (хв) [середня тривалість сесії: {avg_duration_min:.1f} хв]")
-    ax.set_ylabel("Accumulated Inattention (с)")
-    ax.legend()
+            ax.plot(time_ax, series, color="#2ca02c", linewidth=3, label="Assistant" if name == assistant_data[0][0] else "")
+    ax.set_title("Accumulated Inattention — наростаючий (Baseline vs Assistant)", fontsize=16, fontweight="bold")
+    ax.set_xlabel(f"Час (хв) [середня тривалість сесії: {avg_duration_min:.1f} хв]", fontsize=14)
+    ax.set_ylabel("Accumulated Inattention (с)", fontsize=14)
+    ax.tick_params(axis="both", labelsize=12)
+    ax.legend(fontsize=12)
     ax.grid(alpha=0.25)
     fig.tight_layout()
     fig.savefig(output_dir / "accumulated_inattention_time_series.png", dpi=150)
@@ -364,12 +393,13 @@ def build_perclos_distribution_plots(baseline_paths: list[Path], assistant_paths
     assistant_values = pd.concat([load_session(path)["PERCLOS"] for path in assistant_paths], ignore_index=True).dropna()
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.hist(baseline_values, bins=20, alpha=0.5, label='Baseline', color='#d62728')
-    ax.hist(assistant_values, bins=20, alpha=0.5, label='Assistant', color='#2ca02c')
-    ax.legend()
-    ax.set_title("PERCLOS Distribution")
-    ax.set_xlabel("PERCLOS (%)")
-    ax.set_ylabel("Frequency")
+    ax.hist(baseline_values, bins=20, alpha=0.7, label='Baseline', color='#d62728')
+    ax.hist(assistant_values, bins=20, alpha=0.7, label='Assistant', color='#2ca02c')
+    ax.legend(fontsize=12)
+    ax.set_title("Розподіл значень PERCLOS", fontsize=16, fontweight='bold')
+    ax.set_xlabel("PERCLOS — відсоток закриття повік (%)", fontsize=14)
+    ax.set_ylabel("Кількість спостережень", fontsize=14)
+    ax.tick_params(axis='both', labelsize=12)
     ax.grid(axis="y", alpha=0.25)
     fig.tight_layout()
     fig.savefig(output_dir / "perclos_distribution.png", dpi=150)
@@ -384,16 +414,17 @@ def build_session_line_plots(paths: list[Path], label: str, output_dir: Path) ->
         fig, ax = plt.subplots(figsize=(12, 5))
         if "Attention_State" in df.columns:
             shade_attention_states(ax, df)
-        ax.plot(df["TimestampISO"], df["Focus_Score"], label="Focus Score", color="#1f77b4", linewidth=2)
+        ax.plot(df["TimestampISO"], df["Focus_Score"], label="Focus Score", color="#1f77b4", linewidth=3)
         if "PERCLOS" in df.columns:
             ax2 = ax.twinx()
-            ax2.plot(df["TimestampISO"], df["PERCLOS"], label="PERCLOS", color="#d62728", linewidth=1, alpha=0.7)
-            ax2.set_ylabel("PERCLOS (%)", color="#d62728")
-            ax2.tick_params(axis="y", labelcolor="#d62728")
-        ax.set_title(f"Focus Score — {label} — {session_name}")
-        ax.set_ylabel("Focus Score")
+            ax2.plot(df["TimestampISO"], df["PERCLOS"], label="PERCLOS", color="#d62728", linewidth=3)
+            ax2.set_ylabel("PERCLOS — відсоток закриття повік (%)", color="#d62728", fontsize=14)
+            ax2.tick_params(axis="y", labelcolor="#d62728", labelsize=12)
+        ax.set_title(f"Focus Score — {label} — {session_name}", fontsize=16, fontweight="bold")
+        ax.set_ylabel("Focus Score", fontsize=14)
         ax.set_ylim(0, 1)
-        ax.set_xlabel("Час")
+        ax.set_xlabel("Час", fontsize=14)
+        ax.tick_params(axis="both", labelsize=12)
         ax.grid(alpha=0.25)
         handles, labels = ax.get_legend_handles_labels()
         if "PERCLOS" in df.columns:
