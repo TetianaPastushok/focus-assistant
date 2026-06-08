@@ -26,7 +26,7 @@ class FocusConfig:
     consec_frames: int = 2
     bpm_min: int = 8
     bpm_max: int = 25
-    perclos_high: float = 25.0  # Підвищуємо з 15% до 25% для менше помилкових спрацьовувань
+    perclos_high: float = 25.0  # Increased threshold to reduce false positives
     bpm_window_sec: int = 60
     perclos_window_sec: int = 60
     notify_interval_sec: int = 60
@@ -35,29 +35,29 @@ class FocusConfig:
     focus_w_gaze: float = 0.7
     focus_w_alertness: float = 0.3
 
-    # Adaptive intervention logic
-    session_warmup_sec: int = 10  # Дозволяємо користувачу розправитися перед перевіркою
-    warning_grace_sec: int = 10  # Час безперервної втрати уваги до WARNING
-    warning_accum_sec: int = 16  # Накопичуємо 16 сек втрати перед попередженням
+    # Adaptive intervention timing
+    session_warmup_sec: int = 10  # Warmup period before evaluation begins
+    warning_grace_sec: int = 10  # Continuous inattention before WARNING
+    warning_accum_sec: int = 16  # Total inattention seconds before WARNING
     warning_window_sec: int = 20
     warning_cooldown_sec: int = 30
-    critical_grace_sec: int = 20  # 20 сек знехтування перед CRITICAL
+    critical_grace_sec: int = 20  # Continuous inattention before CRITICAL
     critical_accum_sec: int = 24
     critical_cooldown_sec: int = 120
-    recovery_reset_sec: int = 6  # 6 сек зосередженості перед скиданням
-    pose_smoothing_frames: int = 15  # Збільшуємо з 7 до 15 для стабільнішої класифікації зони
+    recovery_reset_sec: int = 6  # Continuous focus needed to reset alert state
+    pose_smoothing_frames: int = 15  # More smoothing for zone classification
     away_hold_sec: float = 2.0
 
-    # Posture warning thresholds (seconds of continuous bad posture)
-    mid_down_warning_sec: float = 45.0  # Light head tilt - warn after 45 sec
-    deep_down_warning_sec: float = 20.0  # Heavy head tilt - warn after 20 sec
-    too_close_warning_sec: float = 15.0  # Too close to screen - warn after 15 sec
-    too_close_distance_px: float = 180.0  # Pixel threshold for too-close face detection
+    # Posture warning thresholds (seconds of sustained bad posture)
+    mid_down_warning_sec: float = 45.0
+    deep_down_warning_sec: float = 20.0
+    too_close_warning_sec: float = 15.0
+    too_close_distance_px: float = 180.0
 
-    # "assistant" -> interventions enabled, "baseline" -> only measurement
+    # Experiment mode: assistant = interventions enabled, baseline = measurement only
     experiment_mode: str = "assistant"
 
     focused_zones: tuple[str, ...] = ("NORMAL", "MID DOWN", "DEEP DOWN")
 
-    # Gemini API key (optional, for dynamic advice)
-    gemini_api_key: Optional[str] = "AIzaSyApCKZonkD_kSBP9PIhMGLPN0T7kH5yu3w"
+    # Gemini API key (optional)
+    gemini_api_key: Optional[str] = "Enter your API key"

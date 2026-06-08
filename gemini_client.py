@@ -35,22 +35,22 @@ class GeminiClient:
             # New API
             self.client = genai.Client(api_key=api_key)
             self.model_name = model
-        self.history: list[str] = []  # Історія останніх 3 порад для уникнення повторів
+        self.history: list[str] = []  # History of recent advice to avoid repetition
 
     def _get_time_of_day(self) -> str:
-        """Визначає час доби."""
+        """Return the current time of day label."""
         hour = datetime.now().hour
         if 6 <= hour < 12:
-            return "ранок"
+            return "morning"
         elif 12 <= hour < 20:
-            return "день"
+            return "day"
         elif 20 <= hour < 23:
-            return "вечір"
+            return "evening"
         else:
-            return "ніч"
+            return "night"
             
     def _build_prompt(self, metrics: dict, context: Optional[dict] = None) -> str:
-        """Будує промпт для Gemini на основі метрик."""
+        """Build the Gemini prompt from current metrics."""
         time_of_day = self._get_time_of_day()
         focus_score = metrics.get("focus_score", 0.5)
         perclos = metrics.get("perclos", 0.0)
@@ -60,11 +60,11 @@ class GeminiClient:
         continuous_inattention = metrics.get("continuous_inattention_sec", 0)
         distractions = metrics.get("distractions", 0)
         
-        # Отримуємо головну причину тригеру (відволікання, втома або постава)
+        # Determine the main trigger reason (distraction, fatigue, posture, etc.)
         reason = metrics.get("intervention_reason", "UNKNOWN")
 
-        # Контекст: попередні поради, щоб уникнути повторів
-        prev_advice = "; ".join(self.history[-3:]) if self.history else "немає"
+        # Provide recent advice context to avoid repetition
+        prev_advice = "; ".join(self.history[-3:]) if self.history else "none"
 
         prompt = f"""
 Ти — турботливий інтелектуальний асистент для підтримки продуктивності. Давай коротку пораду (1-2 речення) українською мовою на основі даних користувача.
@@ -95,26 +95,26 @@ TOO_CLOSE - сидить аномально близько до екрана).
         return prompt.strip()
 
     def generate_advice(self, metrics: dict, context: Optional[dict] = None) -> str:
-        """Генерує пораду через Gemini."""
+        """Generate advice via Gemini."""
         prompt = self._build_prompt(metrics, context)
         try:
-            # Перевіряємо, яку саме версію API ми використовуємо
+            # Select the API version in use
             if hasattr(self, 'model'):
-                # Старий API (legacy)
+                # Legacy API
                 response = self.model.generate_content(prompt)
                 advice = response.text.strip()
             elif hasattr(self, 'client'):
-                # Новий API
+                # New API
                 response = self.client.models.generate_content(
                     model=self.model_name,
                     contents=prompt
                 )
                 advice = response.text.strip()
             else:
-                raise ValueError("Модель ШІ не ініціалізована.")
+                raise ValueError("AI model is not initialized.")
 
-            self.history.append(advice)  # Додаємо в історію
-            if len(self.history) > 5:  # Обмежуємо історію
+            self.history.append(advice)  # Track advice history
+            if len(self.history) > 5:
                 self.history.pop(0)
             return advice
             

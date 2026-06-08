@@ -107,14 +107,14 @@ class FocusAnalyzer:
         self._last_warning_time = 0.0
         self._last_critical_time = 0.0
         self._recovered_since_critical = True
-        self._zone_change_time = start_time  # Час останної зміни зони (для уникнення false blinks)
+        self._zone_change_time = start_time  # Timestamp of the last zone change to avoid false blinks
         
-        # Для виявлення моргання як переходу EAR від HIGH -> LOW -> HIGH
-        self._ear_state = "OPEN"  # "OPEN" або "CLOSED"
+        # Blink detection state machine: OPEN -> CLOSED -> OPEN
+        self._ear_state = "OPEN"  # "OPEN" or "CLOSED"
         self._last_ear_value = 0.5
         self._blink_in_progress = False
         
-        # Для "заморожування" повідомлень на 1.5 секунди в логері
+        # Hold the last intervention result briefly for logging
         self._pending_intervention = None
         self._pending_intervention_time = 0.0
 
@@ -163,48 +163,47 @@ class FocusAnalyzer:
         return smooth_pitch, smooth_yaw
 
     def _detect_blink_motion(self, current_ear: float, current_zone: str) -> bool:
+        """Detects a real blink as an OPEN -> CLOSED -> OPEN transition.
+
+        Blinks are counted only in NORMAL and MID DOWN zones to avoid false detections
+        during extreme head poses.
         """
-        Виявляє справжнє моргання як перехід стану: OPEN -> CLOSED -> OPEN.
-        Рахує як моргання тільки в зонах NORMAL та MID DOWN (не в DEEP DOWN/AWAY тощо).
-        Повертає True якщо в цьому кадрі завершено моргання.
-        """
-        # Не рахуємо моргання 0.2 сек після зміни зони (це артефакт рухання голови)
+        # Ignore blinks immediately after a zone transition to avoid head-movement artifacts
         current_time = getattr(self, '_current_time', self._zone_change_time)
         time_since_zone_change = current_time - self._zone_change_time
         if time_since_zone_change < 0.2:
             return False
         
-        # Визначаємо, чи очі в цьому кадрі закрити або відкрити
-        # EAR = Eye Aspect Ratio
-        # Нормально відкриті очі: 0.2-0.35
-        # Закриті очі: < 0.10
-        # Для стабільності використовуємо гістерезис: 0.10 (close) до 0.15 (open)
-        open_threshold = 0.14  # Мінімум для визнання очей відкритими після закриття
-        close_threshold = 0.12  # Максимум для визнання очей закритими
+        # Determine eye state from EAR values with hysteresis
+        # Typical open eye range: 0.2-0.35
+        # Closed eye threshold: < 0.10
+        # We use hysteresis between close and open thresholds to improve stability
+        open_threshold = 0.14  # Minimum EAR to consider eyes open after closing
+        close_threshold = 0.12  # Maximum EAR to consider eyes closed
         
         if current_ear < close_threshold:
             new_ear_state = "CLOSED"
         elif current_ear > open_threshold:
             new_ear_state = "OPEN"
         else:
-            # Гістерезис: залишаємо попередній стан
+            # Hysteresis: keep the previous state
             new_ear_state = self._ear_state
         
-        # Виявляємо переходи стану
+        # Detect state transitions
         blink_detected = False
         
         if self._ear_state == "OPEN" and new_ear_state == "CLOSED":
-            # Очі починають закриватися (перша фаза моргання)
+            # Eyes are starting to close (first blink phase)
             self._blink_in_progress = True
         elif self._ear_state == "CLOSED" and new_ear_state == "OPEN" and self._blink_in_progress:
-            # Очі відкриваються після закриття (завершення моргання)
+            # Eyes have reopened after closing (blink complete)
             if current_zone in ("NORMAL", "MID DOWN"):
                 blink_detected = True
             self._blink_in_progress = False
         # Note: We don't reset _blink_in_progress when eyes stay CLOSED
-        # That would cancel the blink motion detection mid-blink
+        # That would cancel blink motion detection mid-blink
         
-        # Оновлюємо стан для наступного кадру
+        # Update state for the next frame
         self._ear_state = new_ear_state
         self._last_ear_value = current_ear
         
@@ -283,23 +282,23 @@ class FocusAnalyzer:
         return continuous_inattention_sec, max(0.0, self._window_inattention_sec), continuous_focus_sec
         
     def _fetch_intervention_async(self, level: str, reason: str, metrics: dict):
-        """Викликає ШІ у фоновому потоці, щоб не блокувати камеру."""
+        """Generate intervention text in a background thread to avoid blocking."""
         result = self._build_intervention(level, reason, metrics)
         self._intervention_queue.put(result)
     
     def _build_intervention(self, level: str, reason: str, metrics: dict) -> dict:
-        # Валідуємо вхідні дані
+        # Validate the metric payload
         required_keys = {"focus_score", "perclos", "zone", "attention_state"}
         if not required_keys.issubset(metrics.keys()):
             missing = required_keys - set(metrics.keys())
             logger.warning(f"Missing metrics keys in _build_intervention: {missing}")
-            # Встановлюємо дефолтні значення
+            # Populate missing defaults to keep the intervention path stable
             metrics.setdefault("focus_score", 0.5)
             metrics.setdefault("perclos", 0.0)
             metrics.setdefault("zone", "NORMAL")
             metrics.setdefault("attention_state", "NORMAL")
         
-        # 1. офлайн-порада (Fallback)
+        # 1. Static fallback advice
         messages = {
             ("WARNING", "DISTRACTION"): "Ви почали відволікатися. Спробуйте повернути увагу до задачі.",
             ("WARNING", "FATIGUE"): "Ознаки втоми очей. Переведіть погляд вдалечінь на 20 секунд.",
@@ -319,17 +318,17 @@ class FocusAnalyzer:
         }
         
         static_advice = messages.get((level, reason), "Зосередьтеся на завданні.")
-        final_advice = static_advice  # За замовчуванням беремо статичну пораду
+        final_advice = static_advice  # Default to local static advice
 
-        # 2. Пробуємо викликати ШІ, якщо він увімкнений
+        # 2. Attempt AI-assisted advice if enabled
         if self.enable_ai and self.gemini_client:
             try:
-                # ДОДАЄМО ПРИЧИНУ В СЛОВНИК ДЛЯ ШІ, щоб він розумів контекст (постава, втома тощо)
+                # Add reason so the AI model has full context
                 metrics["intervention_reason"] = reason 
                 
                 ai_advice = self.gemini_client.generate_advice(metrics)
                 
-                # Перевіряємо, чи AI-порада є релевантною, і за необхідності повертаємо локальний рекомендаційний шаблон
+                # Use AI advice only if it is not the fallback response
                 if ai_advice and not ai_advice.startswith("Спробуйте зосередитися"):
                     final_advice = ai_advice
                 else:
@@ -338,13 +337,13 @@ class FocusAnalyzer:
                 logger.error(f"Gemini API error: {e}. Using local advice.")
                 final_advice = static_advice
 
-        # 3. Формуємо фінальний словник події
+        # 3. Build final intervention payload
         return {
             "intervention_level": level,
             "intervention_reason": reason,
             "intervention_message": final_advice,
             "event_type": f"{level}_{reason}",
-            # Сповіщення (вікно Windows) вилазить для CRITICAL АБО для поганої постави/дистанції
+            # Windows notification should show for CRITICAL alerts or unsafe posture/distance
             "should_notify": level == "CRITICAL" or reason in ("BAD_POSTURE", "TOO_CLOSE"),
         }
 
@@ -386,13 +385,13 @@ class FocusAnalyzer:
         if current_time - self.session_start_time < self.cfg.session_warmup_sec:
             return None
 
-        # --- БАГАТОРІВНЕВА ЛОГІКА ДЛЯ ПОСТАВИ ---
-        # Використовуємо пороги з конфігу замість hardcoded констант
+        # --- Multi-level posture and attention logic ---
+        # Use configured thresholds instead of hardcoded constants
         mid_down_warning_sec = self.cfg.mid_down_warning_sec
         deep_down_warning_sec = self.cfg.deep_down_warning_sec
         too_close_warning_sec = self.cfg.too_close_warning_sec
         
-        # Якщо ми у стані відволікання (AWAY/TURNED або закриті очі)
+        # If the user is distracted or eyes are closed
         if zone not in self.cfg.focused_zones and zone != "TOO CLOSE" and perclos > self.cfg.perclos_high:
             reason = "MIXED"
         elif perclos > self.cfg.perclos_high:
@@ -400,12 +399,12 @@ class FocusAnalyzer:
         elif zone not in self.cfg.focused_zones and zone != "TOO CLOSE":
             reason = "DISTRACTION"
             
-        # Якщо ми у сфокусованій зоні, але опустили голову АБО занадто близько
+        # If the user is in a reduced posture or too close to screen
         elif zone in ("MID DOWN", "DEEP DOWN", "TOO CLOSE"):
              is_bad_posture = False
              reason_temp = "DISTRACTION"
              
-             if zone == "TOO CLOSE" and continuous_inattention_sec >= too_close_warning_sec:
+             if zone == "TOO_CLOSE" and continuous_inattention_sec >= too_close_warning_sec:
                  is_bad_posture = True
                  reason_temp = "TOO_CLOSE"
              elif zone == "DEEP DOWN" and continuous_inattention_sec >= deep_down_warning_sec:
@@ -417,11 +416,11 @@ class FocusAnalyzer:
                  
              if is_bad_posture:
                   reason = reason_temp
-                  # Примусово змінюємо статус, щоб тригернути повідомлення
+                  # Force a warning when posture remains poor for the threshold period
                   if self.attention_state == "NORMAL":
                       self.attention_state = "WARNING"
              else:
-                  reason = "DISTRACTION" # Дефолтне значення, поки час не вийшов
+                  reason = "DISTRACTION"  # Default until posture threshold is reached
         else:
             reason = "DISTRACTION"
 
@@ -435,7 +434,7 @@ class FocusAnalyzer:
                     "continuous_inattention_sec": continuous_inattention_sec,
                     "distractions": self.distraction_count,
                 }
-                # Запускаємо фоновий потік замість блокування!
+                # Launch background thread instead of blocking the camera pipeline
                 threading.Thread(target=self._fetch_intervention_async, args=("WARNING", reason, metrics_dict), daemon=True).start()
                 return None
 
@@ -450,7 +449,7 @@ class FocusAnalyzer:
                     "continuous_inattention_sec": continuous_inattention_sec,
                     "distractions": self.distraction_count,
                 }
-                # Запускаємо фоновий потік!
+                # Launch background thread for critical intervention generation
                 threading.Thread(target=self._fetch_intervention_async, args=("CRITICAL", reason, metrics_dict), daemon=True).start()
                 return None
 
@@ -496,7 +495,7 @@ class FocusAnalyzer:
         if elapsed < self.cfg.session_warmup_sec:
             return {
                 "zone": "WARMUP",
-                "color": (150, 150, 150),  # Сірий колір для підготовки
+                "color": (150, 150, 150),  # Gray color used during warm-up
                 "pitch": 0.0,
                 "yaw": 0.0,
                 "bpm": 0,
@@ -539,17 +538,17 @@ class FocusAnalyzer:
             active_ear = max(left_ear, right_ear) if yaw > self.cfg.yaw_limit else (left_ear + right_ear) / 2.0
             raw_zone, raw_color, raw_threshold = self._classify_zone(pitch, yaw)
             
-            # --- Розрахунок відстані до екрана ---
+            # Distance-to-screen estimate
             dx = (landmarks[INNER_LEFT_EYE].x - landmarks[INNER_RIGHT_EYE].x) * width
             dy = (landmarks[INNER_LEFT_EYE].y - landmarks[INNER_RIGHT_EYE].y) * height
             dist_px = hypot(dx, dy)
             self.dist_history.append(dist_px)
             self.eye_distance = sum(self.dist_history) / len(self.dist_history)
             
-            # Перевизначаємо зону, якщо занадто близько (тільки якщо ми не відвернулися вбік)
+            # Override zone when user is too close to screen (unless head is turned away)
             if self.eye_distance > self.cfg.too_close_distance_px and raw_zone != "AWAY/TURNED":
                 raw_zone = "TOO CLOSE"
-                raw_color = (0, 165, 255)  # Оранжевий колір (BGR: 255, 165, 0)
+                raw_color = (0, 165, 255)  # Orange color (BGR: 255, 165, 0)
             # --------------------------------------------
 
             zone, color, threshold = self._apply_away_hold(current_time, raw_zone, raw_color, raw_threshold)
@@ -559,8 +558,8 @@ class FocusAnalyzer:
             self._window_closed += is_closed
             self._perclos_window.append((current_time, is_closed))
 
-            # Виявляємо справжнє моргання як перехід: OPEN -> CLOSED -> OPEN
-            self._current_time = current_time  # Для доступу в методі _detect_blink_motion
+            # Detect a real blink as an OPEN -> CLOSED -> OPEN transition
+            self._current_time = current_time  # Keep current timestamp available for _detect_blink_motion
             blink_detected = self._detect_blink_motion(active_ear, raw_zone)
             if blink_detected:
                 self.blink_count += 1
@@ -574,7 +573,7 @@ class FocusAnalyzer:
             self.focus_start_time = current_time
             self.current_focus_duration = 0.0
         
-        # Записуємо час зміни зони
+        # Record the zone change timestamp
         if zone != self.last_zone:
             self._zone_change_time = current_time
         
@@ -587,7 +586,7 @@ class FocusAnalyzer:
         gaze_score = self._zone_gaze_score(zone)
         focus_score = self._compute_focus_score(gaze_score, perclos, bpm)
 
-        # Стан неуважності базується на позі голови, закритих очах, поганій поставі АБО якщо занадто близько
+        # Inattention state depends on head pose, closed eyes, poor posture, or too close distance
         inattentive = (
             zone not in self.cfg.focused_zones
             or zone in ("MID DOWN", "DEEP DOWN", "TOO CLOSE")  
@@ -616,19 +615,19 @@ class FocusAnalyzer:
         except queue.Empty:
             pass
 
-        # Якщо є нове повідомлення, "заморожуємо" його на 1.5 секунди для логера
+        # If there is a new intervention, freeze it for 1.5 seconds for the logger
         if intervention:
             self._pending_intervention = intervention
             self._pending_intervention_time = current_time
             
-        # Якщо повідомлення старе (більше 1.5 сек), очищаємо його
+        # If the message is old (>1.5 sec), clear it
         if self._pending_intervention and (current_time - self._pending_intervention_time) > 1.5:
             self._pending_intervention = None
             
-        # Визначаємо, що саме передавати в метрики (нове або "заморожене")
+        # Select which intervention to expose in metrics (new or frozen)
         active_intervention = intervention or self._pending_intervention
 
-        # Захист від порожніх словників:
+        # Protect against empty dictionaries:
         int_level = active_intervention.get("intervention_level", "") if active_intervention else ""
         int_reason = active_intervention.get("intervention_reason", "") if active_intervention else ""
         int_msg = active_intervention.get("intervention_message", "") if active_intervention else ""
@@ -651,10 +650,10 @@ class FocusAnalyzer:
             "continuous_inattention_sec": round(continuous_inattention_sec, 2),
             "accumulated_inattention_sec": round(accumulated_inattention_sec, 2),
             
-            # Тільки для нотифікацій
+            # Notification control
             "should_notify": bool(intervention and intervention.get("should_notify")),
             
-            # Для логера
+            # Log fields
             "intervention_level": int_level,
             "intervention_reason": int_reason,
             "intervention_message": int_msg,

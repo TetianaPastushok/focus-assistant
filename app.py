@@ -73,7 +73,7 @@ class FocusAssistantApp(ctk.CTk):
         self.cap = None
         self.face_mesh = None
         self._frame_image = None
-        self._frame_debug_counter = 0  # Лічильник кадрів для періодичного інформаційного логування
+        self._frame_debug_counter = 0  # Frame counter for periodic debug logging
 
         self.tray = TrayManager(
             title="KPI Фокус Асистент",
@@ -87,11 +87,11 @@ class FocusAssistantApp(ctk.CTk):
         self.tray.start()
 
     def _build_ui(self):
-        # Main layout with proper weighting for responsiveness
+        # Main layout with responsive grid configuration
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # Main container (regular Frame instead of ScrollableFrame to avoid lag)
+        # Primary container frame for the application content
         self.main_container = ctk.CTkFrame(self, corner_radius=15, fg_color="#F5F7FA")
         self.main_container.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
         self.main_container.grid_rowconfigure(2, weight=1)  # Video expands
@@ -129,12 +129,12 @@ class FocusAssistantApp(ctk.CTk):
         )
         self.video_label.grid(row=0, column=0, sticky="n", padx=8, pady=8)
 
-        # Stats cards - responsive
+        # Stats cards section with responsive layout
         self.stats_frame = ctk.CTkFrame(self.main_container, corner_radius=12, fg_color="transparent")
         self.stats_frame.grid(row=3, column=0, pady=8, padx=12, sticky="ew")
         self.stats_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-        # Stat cards with wraplength to prevent text overlap
+        # Use wraplength to keep card text readable
         self.stat_focus_frame = ctk.CTkFrame(self.stats_frame, corner_radius=10)
         self.stat_focus_frame.grid(row=0, column=0, padx=3, pady=4, sticky="ew")
         self.stat_focus = ctk.CTkLabel(
@@ -159,7 +159,7 @@ class FocusAssistantApp(ctk.CTk):
         self.stat_bpm_frame.grid(row=0, column=2, padx=3, pady=4, sticky="ew")
         self.stat_bpm = ctk.CTkLabel(
             self.stat_bpm_frame, 
-            text="BPM\n0", 
+            text="ЧСС\n0", 
             font=ctk.CTkFont(size=12, weight="bold"),
             wraplength=90
         )
@@ -175,7 +175,7 @@ class FocusAssistantApp(ctk.CTk):
         )
         self.stat_score.pack(pady=6, padx=6)
 
-        # Status cards
+        # Status panel for mode, attention state and zone labels
         mode_ua = MODE_UA.get(self.analyzer.mode, self.analyzer.mode)
         self.status_frame = ctk.CTkFrame(self.main_container, corner_radius=15, fg_color="#E9EEF5")
         self.status_frame.grid(row=4, column=0, pady=10, padx=12, sticky="ew")
@@ -261,7 +261,7 @@ class FocusAssistantApp(ctk.CTk):
 
     def _update_state_label(self):
         """Update the mode and state display label."""
-        current_state = ATTENTION_STATE_UA.get('NORMAL', 'НОРМА')
+        current_state = ATTENTION_STATE_UA.get('NORMAL', 'Норма')
         mode_ua = MODE_UA.get(self.analyzer.mode, self.analyzer.mode)
         self.stat_mode.configure(text=f"Режим: {mode_ua}")
         self.stat_attention.configure(text=f"Стан: {current_state}")
@@ -359,10 +359,10 @@ class FocusAssistantApp(ctk.CTk):
 
     def hide_to_tray(self):
         if not self.tray.available:
-            self.video_label.configure(text="System Tray недоступний (встановіть pystray)")
+            self.video_label.configure(text="Системний трей недоступний (встановіть pystray)")
             return
         self.withdraw()
-        self.tray.notify("KPI Фокус Асистент", "Програма працює у фоні (System Tray).")
+        self.tray.notify("KPI Фокус Асистент", "Програма працює у фоні (системний трей).")
 
     def show_from_tray(self):
         self.deiconify()
@@ -425,15 +425,15 @@ class FocusAssistantApp(ctk.CTk):
             font_size=32,
         )
 
-        # Відображення та логування повідомлень про інтервенцію асистента
+        # Display and log assistant intervention messages
         if metrics.get("should_notify") and metrics.get("intervention_message"):
-            # Логування інтервенцій для подальшого аналізу ефективності
+            # Log interventions for later effectiveness analysis
             logger.info(f"[INTERVENTION] {metrics['intervention_level']}: {metrics['intervention_message']}")
             
-            # Відправляємо тихе сповіщення в системний трей
+            # Send a silent tray notification
             self.tray.notify("Порада асистента", metrics["intervention_message"])
             
-            # 3. Викликаємо спливаюче вікно Windows
+            # Show a Windows notification if available
             try:
                 notification.notify(
                     title="Зниження концентрації",
@@ -447,7 +447,7 @@ class FocusAssistantApp(ctk.CTk):
         minutes, seconds = divmod(metrics["focus_duration_sec"], 60)
         self.stat_focus.configure(text=f"Час фокусу:\n{minutes} хв {seconds} с")
         self.stat_distractions.configure(text=f"Відволікання:\n{metrics['distractions']}")
-        self.stat_bpm.configure(text=f"BPM:\n{metrics['bpm']}")
+        self.stat_bpm.configure(text=f"ЧСС:\n{metrics['bpm']}")
         self.stat_score.configure(text=f"Коефіцієнт фокусу:\n{metrics['focus_score']}")
         state_label = ATTENTION_STATE_UA.get(metrics["attention_state"], metrics["attention_state"])
         mode_ua = MODE_UA.get(metrics['mode'], metrics['mode'])
@@ -455,7 +455,7 @@ class FocusAssistantApp(ctk.CTk):
         self.stat_attention.configure(text=f"Стан: {state_label}")
         self.stat_zone.configure(text=f"Зона: {zone_label}")
 
-        # Періодичне інформативне логування ключових метрик стану уваги
+        # Periodic informational logging of key attention metrics
         self._frame_debug_counter += 1
         if self._frame_debug_counter % 30 == 0:
             logger.debug(f"Focus: {metrics['focus_score']:.2f} | PERCLOS: {metrics['perclos']:.1f}% | "

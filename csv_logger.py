@@ -21,15 +21,15 @@ class SessionCsvLogger:
     def start(self) -> None:
         self.stop()
         
-        # 1. Створюємо папку 'logs', якщо її ще немає
+        # Create logs folder if missing
         log_dir = self.path.parent / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         
-        # 2. Генеруємо унікальну назву файлу з поточною датою та часом
+        # Generate a timestamped session filename
         now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_filename = f"{self.path.stem}_{now_str}{self.path.suffix}"
         
-        # 3. Вказуємо шлях до нового файлу В СЕРЕДИНІ папки logs
+        # Build the actual log file path inside logs
         actual_path = log_dir / unique_filename
         
         self._file = actual_path.open("w", newline="", buffering=1, encoding="utf-8")

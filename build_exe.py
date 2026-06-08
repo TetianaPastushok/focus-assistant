@@ -40,18 +40,18 @@ def build_exe():
         "app.py"
     ]
     
-    print("Компіляція програми в EXE...")
+    print("Building the application EXE...")
     print(" ".join(cmd))
     result = subprocess.run(cmd, cwd=project_dir)
     
     if result.returncode == 0:
         exe_path = project_dir / "dist" / "KPIFocusAssistant.exe"
-        print(f"\n✅ Готово! Файл: {exe_path}")
-        print(f"Розмір: ~500-800 MB (залежить від залежностей)")
-        print(f"\nДля запуску:")
+        print(f"\n✅ Done! File: {exe_path}")
+        print(f"Size: ~500-800 MB (depends on dependencies)")
+        print(f"\nTo run:")
         print(f"  {exe_path}")
     else:
-        print(f"\n❌ Помилка при компіляції (код {result.returncode})")
+        print(f"\n❌ Build failed (exit code {result.returncode})")
         sys.exit(1)
 
 if __name__ == "__main__":
