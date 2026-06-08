@@ -34,10 +34,10 @@ ctk.set_default_color_theme("blue")
 
 ZONE_UA = {
     "NORMAL": "Норма",
-    "MID DOWN": "Нахил вниз",
-    "DEEP DOWN": "Критичний нахил",
+    "MID DOWN": "Нижче норми",
+    "DEEP DOWN": "Сильно вниз",
     "LOOKING UP": "Погляд вгору",
-    "AWAY/TURNED": "Відсутній",
+    "AWAY/TURNED": "Відвернувся",
     "NO FACE": "Обличчя не виявлено",
     "TOO CLOSE": "Занадто близько",
     "WARMUP": "Калібрування",
